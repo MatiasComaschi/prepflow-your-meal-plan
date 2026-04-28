@@ -86,12 +86,36 @@ export type Database = {
         }
         Relationships: []
       }
+      user_seen_recipes: {
+        Row: {
+          id: string
+          recipe_id: string
+          seen_at: string
+          user_id: string
+        }
+        Insert: {
+          id?: string
+          recipe_id: string
+          seen_at?: string
+          user_id: string
+        }
+        Update: {
+          id?: string
+          recipe_id?: string
+          seen_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      count_unseen_cached_recipes: {
+        Args: { _category: string; _tags: string[]; _user_id: string }
+        Returns: number
+      }
     }
     Enums: {
       [_ in never]: never

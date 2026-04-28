@@ -14,6 +14,7 @@ import { ProgressRecapCard } from "@/components/feed-cards/ProgressRecapCard";
 import { buildFeed } from "@/data/feed";
 import { usePlanner } from "@/store/planner";
 import { usePreferences } from "@/store/preferences";
+import { supabase } from "@/integrations/supabase/client";
 import { Loader2 } from "lucide-react";
 
 export const Route = createFileRoute("/")({
@@ -47,9 +48,27 @@ function Page() {
   const [done, setDone] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [insight, setInsight] = useState<string | null>(null);
+  const [userId, setUserId] = useState<string | null>(null);
   const baseOffsetRef = useRef(0);
   const sentinelRef = useRef<HTMLDivElement | null>(null);
   const scrollerRef = useRef<HTMLDivElement | null>(null);
+
+  // Track signed-in user (used by the server to log seen recipes).
+  useEffect(() => {
+    let mounted = true;
+    supabase.auth.getSession().then(({ data }) => {
+      if (mounted) setUserId(data.session?.user?.id ?? null);
+    });
+    const { data: sub } = supabase.auth.onAuthStateChange((_e, session) => {
+      setUserId(session?.user?.id ?? null);
+    });
+    return () => {
+      mounted = false;
+      sub.subscription.unsubscribe();
+    };
+  }, []);
+  const userIdRef = useRef<string | null>(null);
+  userIdRef.current = userId;
 
   const { plan, daysPlanned, streak, weeklyTotals } = usePlanner();
   const { prefs, ready: prefsReady } = usePreferences();
@@ -88,6 +107,7 @@ function Page() {
             offset: currentOffset,
             number: PAGE_SIZE,
             filters: filtersRef.current,
+            userId: userIdRef.current,
           },
         });
         if (res.recipes.length === 0) {
