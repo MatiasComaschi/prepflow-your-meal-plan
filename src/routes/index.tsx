@@ -48,9 +48,27 @@ function Page() {
   const [done, setDone] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [insight, setInsight] = useState<string | null>(null);
+  const [userId, setUserId] = useState<string | null>(null);
   const baseOffsetRef = useRef(0);
   const sentinelRef = useRef<HTMLDivElement | null>(null);
   const scrollerRef = useRef<HTMLDivElement | null>(null);
+
+  // Track signed-in user (used by the server to log seen recipes).
+  useEffect(() => {
+    let mounted = true;
+    supabase.auth.getSession().then(({ data }) => {
+      if (mounted) setUserId(data.session?.user?.id ?? null);
+    });
+    const { data: sub } = supabase.auth.onAuthStateChange((_e, session) => {
+      setUserId(session?.user?.id ?? null);
+    });
+    return () => {
+      mounted = false;
+      sub.subscription.unsubscribe();
+    };
+  }, []);
+  const userIdRef = useRef<string | null>(null);
+  userIdRef.current = userId;
 
   const { plan, daysPlanned, streak, weeklyTotals } = usePlanner();
   const { prefs, ready: prefsReady } = usePreferences();
