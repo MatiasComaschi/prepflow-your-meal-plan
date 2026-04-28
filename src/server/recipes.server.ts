@@ -122,35 +122,61 @@ export async function fetchRecipes(
   data: FetchInput,
 ): Promise<{ recipes: Recipe[]; totalResults: number }> {
   const number = Math.min(data.number ?? 10, 20);
+  const userId = data.userId ?? null;
 
+  // 1) Determine sliding-scale ratio from total matches in cache (ignores seen).
+  let totalMatches = 0;
+  try {
+    totalMatches = await countMatchingCached(data.category, data.filters);
+  } catch (e) {
+    console.error("countMatchingCached failed", e);
+  }
+
+  let cacheRatio: number;
+  if (totalMatches < MATCH_LOW) cacheRatio = 0;
+  else if (totalMatches < MATCH_HIGH) cacheRatio = 0.4;
+  else cacheRatio = 1;
+
+  // 2) Query cache (excluding seen for this user).
   let cached: Recipe[] = [];
   try {
     const cacheRes = await queryCache({
       category: data.category,
       filters: data.filters,
       limit: Math.max(number, CACHE_THRESHOLD),
+      userId,
     });
     cached = cacheRes.recipes;
   } catch (e) {
     console.error("cache query failed", e);
   }
 
-  if (cached.length >= CACHE_THRESHOLD) {
-    const slice = cached.slice(0, number);
-    incrementHits(slice.map((r) => r.id)).catch(() => {});
-    return { recipes: slice, totalResults: cached.length };
+  // 3) Fallback rule: if seen-exclusion drops cache below threshold, treat as new-user.
+  if (cached.length < CACHE_THRESHOLD) {
+    cacheRatio = 0;
   }
 
+  const targetFromCache = Math.min(cached.length, Math.round(number * cacheRatio));
+  const targetFromApi = number - targetFromCache;
+
+  const cacheSlice = cached.slice(0, targetFromCache);
+
+  // 4) If we're serving 100% from cache (or no API key), short-circuit.
   const apiKey = process.env.SPOONACULAR_API_KEY;
-  if (!apiKey) {
-    return { recipes: cached.slice(0, number), totalResults: cached.length };
+  if (targetFromApi <= 0 || !apiKey) {
+    if (cacheSlice.length) {
+      incrementHits(cacheSlice.map((r) => r.id)).catch(() => {});
+      if (userId) markRecipesSeen(userId, cacheSlice.map((r) => r.id)).catch(() => {});
+    }
+    return { recipes: cacheSlice, totalResults: totalMatches || cacheSlice.length };
   }
 
+  // 5) Fetch fresh from Spoonacular for the remainder.
   const prefParams = buildPrefParams(data.filters, data.category);
   const params = new URLSearchParams({
     apiKey,
     type: CATEGORY_TO_TYPE[data.category],
-    number: String(number),
+    number: String(Math.max(targetFromApi, number)),
     offset: String(Math.max(0, data.offset)),
     addRecipeNutrition: "true",
     addRecipeInformation: "true",
@@ -164,12 +190,17 @@ export async function fetchRecipes(
   if (!res.ok) {
     const text = await res.text();
     console.error("Spoonacular error", res.status, text);
-    return { recipes: cached.slice(0, number), totalResults: cached.length };
+    const fallback = cached.slice(0, number);
+    if (fallback.length) {
+      incrementHits(fallback.map((r) => r.id)).catch(() => {});
+      if (userId) markRecipesSeen(userId, fallback.map((r) => r.id)).catch(() => {});
+    }
+    return { recipes: fallback, totalResults: totalMatches || fallback.length };
   }
   const json: any = await res.json();
   const results: any[] = json.results ?? [];
 
-  const cachedIds = new Set(cached.map((r) => r.id));
+  const cacheIds = new Set(cacheSlice.map((r) => r.id));
   const fresh: Recipe[] = results
     .map((r) => {
       const nutrients = r.nutrition?.nutrients ?? [];
@@ -225,7 +256,8 @@ export async function fetchRecipes(
         steps: steps.length ? steps : ["Combine ingredients and serve."],
       } as Recipe;
     })
-    .filter((r) => !cachedIds.has(r.id));
+    .filter((r) => !cacheIds.has(r.id))
+    .slice(0, targetFromApi);
 
   const reviewed = await Promise.all(
     fresh.map(async (r) => {
@@ -269,8 +301,12 @@ export async function fetchRecipes(
     }),
   );
 
-  const combined = [...cached, ...reviewed].slice(0, number);
-  incrementHits(cached.slice(0, number).map((r) => r.id)).catch(() => {});
+  const combined = [...cacheSlice, ...reviewed].slice(0, number);
+
+  if (cacheSlice.length) incrementHits(cacheSlice.map((r) => r.id)).catch(() => {});
+  if (userId && combined.length) {
+    markRecipesSeen(userId, combined.map((r) => r.id)).catch(() => {});
+  }
 
   return {
     recipes: combined,
