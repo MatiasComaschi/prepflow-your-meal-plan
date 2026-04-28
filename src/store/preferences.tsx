@@ -13,8 +13,20 @@ export type Restriction =
   | "no_pork"
   | "no_shellfish";
 
+export type AIPlan = {
+  daily_calories: number;
+  protein_g: number;
+  carbs_g: number;
+  fat_g: number;
+  meal_keywords: string[];
+  avoid: string[];
+  reasoning: string;
+};
+
 export type Preferences = {
   goal: Goal;
+  goalText?: string;
+  aiPlan?: AIPlan | null;
   mealsPerDay: MealsPerDay;
   restrictions: Restriction[];
   skill: SkillLevel;
@@ -24,6 +36,8 @@ export type Preferences = {
 
 export const DEFAULT_PREFS: Preferences = {
   goal: "maintain",
+  goalText: "",
+  aiPlan: null,
   mealsPerDay: 3,
   restrictions: ["none"],
   skill: "intermediate",
