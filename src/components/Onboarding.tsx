@@ -198,9 +198,15 @@ export function Onboarding() {
           <button
             type="button"
             onClick={next}
-            className="flex h-12 flex-1 items-center justify-center gap-2 rounded-2xl bg-primary px-4 text-sm font-bold text-primary-foreground shadow-lg shadow-primary/20"
+            disabled={analyzing}
+            className="flex h-12 flex-1 items-center justify-center gap-2 rounded-2xl bg-primary px-4 text-sm font-bold text-primary-foreground shadow-lg shadow-primary/20 disabled:opacity-70"
           >
-            {isLast ? (
+            {analyzing ? (
+              <>
+                <Loader2 className="h-4 w-4 animate-spin" />
+                Analyzing your goal…
+              </>
+            ) : isLast ? (
               <>
                 <Check className="h-4 w-4" />
                 Start cooking
