@@ -59,8 +59,10 @@ function Page() {
       restrictions: prefs.restrictions,
       skill: prefs.skill,
       budget: prefs.budget,
+      aiPlan: prefs.aiPlan ?? null,
+      mealsPerDay: prefs.mealsPerDay,
     }),
-    [prefs.goal, prefs.restrictions, prefs.skill, prefs.budget],
+    [prefs.goal, prefs.restrictions, prefs.skill, prefs.budget, prefs.aiPlan, prefs.mealsPerDay],
   );
   const filterKey = useMemo(() => JSON.stringify(filters), [filters]);
 
