@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useState } from "react";
 import { ChevronLeft, ChevronRight, Check, Sparkles, Loader2 } from "lucide-react";
 import {
   usePreferences,
