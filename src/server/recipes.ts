@@ -12,6 +12,7 @@ export const fetchRecipesServerFn = createServerFn({ method: "GET" })
       offset: number;
       number?: number;
       filters?: RecipeFilters;
+      userId?: string | null;
     }) => d,
   )
   .handler(async ({ data }) => fetchRecipes(data));
