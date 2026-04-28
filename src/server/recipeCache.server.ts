@@ -8,7 +8,56 @@ export type QueryCacheInput = {
   filters?: RecipeFilters;
   limit: number;
   excludeIds?: string[];
+  userId?: string | null;
 };
+
+// ───────────────────────── Seen tracking ─────────────────────────
+export async function getSeenRecipeIds(userId: string): Promise<Set<string>> {
+  const ids = new Set<string>();
+  if (!userId) return ids;
+  const { data, error } = await supabaseAdmin
+    .from("user_seen_recipes")
+    .select("recipe_id")
+    .eq("user_id", userId)
+    .limit(5000);
+  if (error) {
+    console.error("getSeenRecipeIds error", error.message);
+    return ids;
+  }
+  for (const row of data ?? []) ids.add(row.recipe_id as string);
+  return ids;
+}
+
+export async function markRecipesSeen(
+  userId: string,
+  recipeIds: string[],
+): Promise<void> {
+  if (!userId || !recipeIds.length) return;
+  const rows = recipeIds.map((id) => ({ user_id: userId, recipe_id: id }));
+  const { error } = await supabaseAdmin
+    .from("user_seen_recipes")
+    .upsert(rows, { onConflict: "user_id,recipe_id", ignoreDuplicates: true });
+  if (error) console.error("markRecipesSeen error", error.message);
+}
+
+// Count cached recipes matching this filter signature (ignores seen).
+export async function countMatchingCached(
+  category: Category,
+  filters: RecipeFilters | undefined,
+): Promise<number> {
+  const wantedTags = tagsFromFilters(filters);
+  let q = supabaseAdmin
+    .from("cached_recipes")
+    .select("id", { count: "exact", head: true })
+    .eq("category", category);
+  if (wantedTags.length) q = q.overlaps("tags", wantedTags);
+  const { count, error } = await q;
+  if (error) {
+    console.error("countMatchingCached error", error.message);
+    return 0;
+  }
+  return count ?? 0;
+}
 
 // ───────────────────────── Tag derivation ─────────────────────────
 export function deriveTags(r: {
