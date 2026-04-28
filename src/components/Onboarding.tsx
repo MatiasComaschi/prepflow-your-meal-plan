@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { ChevronLeft, ChevronRight, Check, Sparkles } from "lucide-react";
+import { ChevronLeft, ChevronRight, Check, Sparkles, Loader2 } from "lucide-react";
 import {
   usePreferences,
   GOAL_OPTIONS,
@@ -10,6 +10,7 @@ import {
   type Preferences,
   type Restriction,
 } from "@/store/preferences";
+import { analyzeGoalServerFn } from "@/server/aiPlan";
 
 const STEPS = ["goal", "meals", "restrictions", "skill", "budget"] as const;
 type Step = (typeof STEPS)[number];
@@ -18,6 +19,7 @@ export function Onboarding() {
   const { prefs, setPrefs, ready } = usePreferences();
   const [draft, setDraft] = useState<Preferences>(prefs);
   const [stepIdx, setStepIdx] = useState(0);
+  const [analyzing, setAnalyzing] = useState(false);
 
   if (!ready) return null;
   if (prefs.onboarded) return null;
@@ -25,9 +27,21 @@ export function Onboarding() {
   const step: Step = STEPS[stepIdx];
   const isLast = stepIdx === STEPS.length - 1;
 
-  const next = () => {
+  const next = async () => {
     if (isLast) {
-      setPrefs({ ...draft, onboarded: true });
+      setAnalyzing(true);
+      let aiPlan = null;
+      try {
+        const res = await analyzeGoalServerFn({
+          data: { goalText: draft.goalText?.trim() || `${draft.goal}` },
+        });
+        aiPlan = res.plan;
+      } catch (e) {
+        console.error("AI analyze failed", e);
+      } finally {
+        setAnalyzing(false);
+      }
+      setPrefs({ ...draft, aiPlan, onboarded: true });
     } else {
       setStepIdx((i) => i + 1);
     }
