@@ -167,7 +167,7 @@ function rowToPrefs(row: any): Preferences {
   };
 }
 
-function prefsToRow(p: Preferences): Record<string, any> {
+function prefsToRow(p: Preferences): ProfileUpdate {
   return {
     age: p.age,
     biological_sex: p.biologicalSex,
