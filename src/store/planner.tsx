@@ -25,8 +25,8 @@ export function PlannerProvider({ children }: { children: ReactNode }) {
   const [plan, setPlan] = useState<Plan>(() => {
     // seed with a couple meals for delight
     const p = emptyPlan();
-    p.Mon = [{ id: "s1", recipeId: "r1" }, { id: "s2", recipeId: "r4" }];
-    p.Tue = [{ id: "s3", recipeId: "r2" }];
+    p.Mon = [{ id: "seed1", recipeId: "b1" }, { id: "seed2", recipeId: "l1" }];
+    p.Tue = [{ id: "seed3", recipeId: "l2" }];
     return p;
   });
 
