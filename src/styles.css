@@ -131,3 +131,19 @@
   from { transform: translateY(100%); opacity: 0.6; }
   to   { transform: translateY(0);    opacity: 1; }
 }
+
+@keyframes shimmer {
+  0%   { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+
+.shimmer-bg {
+  background: linear-gradient(
+    100deg,
+    color-mix(in oklab, var(--surface) 92%, transparent) 20%,
+    color-mix(in oklab, var(--surface-elevated) 70%, transparent) 50%,
+    color-mix(in oklab, var(--surface) 92%, transparent) 80%
+  );
+  background-size: 200% 100%;
+  animation: shimmer 1.6s linear infinite;
+}

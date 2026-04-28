@@ -3,6 +3,7 @@ import { X, Clock, Flame, ChefHat, Users, Plus, Check, ChevronDown } from "lucid
 import type { Recipe } from "@/data/recipes";
 import { MacroBar } from "./MacroBar";
 import { VerificationBadge } from "./VerificationBadge";
+import { RecipeImage } from "./RecipeImage";
 import { usePlanner, DAYS, type Day } from "@/store/planner";
 
 type Props = {
@@ -42,12 +43,12 @@ export function RecipeDetail({ recipe, onClose }: Props) {
       <div className="relative mx-auto flex h-[100dvh] w-full max-w-md flex-col bg-background shadow-2xl animate-[slide-up_0.35s_ease-out]">
         {/* Hero */}
         <div className="relative h-[42dvh] min-h-[280px] w-full shrink-0 overflow-hidden">
-          <img
-            src={recipe.image}
+          <RecipeImage
+            recipeId={recipe.id}
+            recipeName={recipe.name}
+            fallback={recipe.image}
             alt={recipe.name}
-            width={832}
-            height={1216}
-            className="absolute inset-0 h-full w-full object-cover"
+            eager
           />
           <div
             className="absolute inset-0"

@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Clock, Flame, Plus, Check } from "lucide-react";
 import { MacroBar } from "./MacroBar";
 import { VerificationBadge } from "./VerificationBadge";
+import { RecipeImage } from "./RecipeImage";
 import type { Recipe } from "@/data/recipes";
 
 type Props = {
@@ -30,13 +31,12 @@ export function RecipeCard({ recipe, eager, onOpen, added }: Props) {
         }`}
         aria-label={`Open ${recipe.name} details`}
       >
-        <img
-          src={recipe.image}
+        <RecipeImage
+          recipeId={recipe.id}
+          recipeName={recipe.name}
+          fallback={recipe.image}
           alt={recipe.name}
-          width={832}
-          height={1216}
-          loading={eager ? "eager" : "lazy"}
-          className="absolute inset-0 h-full w-full object-cover"
+          eager={eager}
         />
         <div
           className="absolute inset-0"
