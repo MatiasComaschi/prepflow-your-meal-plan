@@ -13,43 +13,49 @@ export const generateRecipeImageServerFn = createServerFn({ method: "POST" })
     return data;
   })
   .handler(async ({ data }) => {
-    const apiKey = process.env.TOGETHER_API_KEY;
+    const apiKey = process.env.LOVABLE_API_KEY;
     if (!apiKey) {
-      throw new Error("TOGETHER_API_KEY not configured");
+      console.error("LOVABLE_API_KEY not configured");
+      return { url: null as string | null, error: "no_api_key" };
     }
 
-    const res = await fetch("https://api.together.xyz/v1/images/generations", {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${apiKey}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        model: "black-forest-labs/FLUX.1-schnell-Free",
-        prompt: data.prompt,
-        width: 832,
-        height: 1216,
-        steps: 4,
-        n: 1,
-        response_format: "b64_json",
-      }),
-    });
+    try {
+      const res = await fetch(
+        "https://ai.gateway.lovable.dev/v1/chat/completions",
+        {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${apiKey}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            model: "google/gemini-2.5-flash-image",
+            messages: [{ role: "user", content: data.prompt }],
+            modalities: ["image", "text"],
+          }),
+        },
+      );
 
-    if (!res.ok) {
-      const txt = await res.text().catch(() => "");
-      console.error(`Together API error ${res.status}:`, txt.slice(0, 300));
-      return { url: null as string | null, error: `together_${res.status}` };
-    }
+      if (!res.ok) {
+        const txt = await res.text().catch(() => "");
+        console.error(`Lovable AI image error ${res.status}:`, txt.slice(0, 300));
+        return { url: null, error: `lovable_${res.status}` };
+      }
 
-    const json = (await res.json()) as {
-      data?: Array<{ b64_json?: string; url?: string }>;
-    };
-    const first = json.data?.[0];
-    if (first?.b64_json) {
-      return { url: `data:image/png;base64,${first.b64_json}`, error: null };
+      const json = (await res.json()) as {
+        choices?: Array<{
+          message?: {
+            images?: Array<{ image_url?: { url?: string } }>;
+          };
+        }>;
+      };
+      const url = json.choices?.[0]?.message?.images?.[0]?.image_url?.url;
+      if (!url) {
+        return { url: null, error: "no_image" };
+      }
+      return { url, error: null };
+    } catch (e) {
+      console.error("Image generation failed:", e);
+      return { url: null, error: "exception" };
     }
-    if (first?.url) {
-      return { url: first.url, error: null };
-    }
-    return { url: null, error: "no_image" };
   });
