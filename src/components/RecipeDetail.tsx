@@ -46,7 +46,7 @@ export function RecipeDetail({ recipe, onClose }: Props) {
           <RecipeImage
             recipeId={recipe.id}
             recipeName={recipe.name}
-            fallback={recipe.image}
+            preferred={recipe.image}
             alt={recipe.name}
             eager
           />

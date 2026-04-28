@@ -33,7 +33,7 @@ export function RecipeCard({ recipe, eager, onOpen, added }: Props) {
         <RecipeImage
           recipeId={recipe.id}
           recipeName={recipe.name}
-          fallback={recipe.image}
+          preferred={recipe.image}
           alt={recipe.name}
           eager={eager}
         />
