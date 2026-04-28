@@ -1,8 +1,7 @@
 // Server-only fetch + review + cache pipeline.
 import type { Category, Difficulty, Ingredient, Recipe } from "@/data/recipes";
 import type { RecipeFilters } from "./recipes.types";
-import { reviewRecipe } from "./aiReview.server";
-import { applyReview } from "./aiReview.shared";
+import { reviewRecipeServerFn, applyReview } from "./aiReview";
 import {
   queryCache,
   saveCachedRecipe,
