@@ -1,10 +1,12 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useMemo, useState } from "react";
-import { RECIPES, CATEGORIES, type Category, type Recipe } from "@/data/recipes";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { CATEGORIES, type Category, type Recipe } from "@/data/recipes";
+import { fetchRecipesServerFn } from "@/server/recipes";
 import { RecipeCard } from "@/components/RecipeCard";
 import { RecipeDetail } from "@/components/RecipeDetail";
 import { BottomNav } from "@/components/BottomNav";
 import { usePlanner } from "@/store/planner";
+import { Loader2 } from "lucide-react";
 
 export const Route = createFileRoute("/")({
   head: () => ({
@@ -25,11 +27,21 @@ export const Route = createFileRoute("/")({
   component: Page,
 });
 
+const PAGE_SIZE = 10;
+
 function Page() {
   const [category, setCategory] = useState<Category>("Breakfast");
   const [active, setActive] = useState<Recipe | null>(null);
-  const { plan } = usePlanner();
+  const [recipes, setRecipes] = useState<Recipe[]>([]);
+  const [offset, setOffset] = useState(0);
+  const [loading, setLoading] = useState(false);
+  const [done, setDone] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const baseOffsetRef = useRef(0);
+  const sentinelRef = useRef<HTMLDivElement | null>(null);
+  const scrollerRef = useRef<HTMLDivElement | null>(null);
 
+  const { plan } = usePlanner();
   const inWeek = useMemo(() => {
     const set = new Set<string>();
     Object.values(plan).forEach((day) =>
@@ -38,19 +50,68 @@ function Page() {
     return set;
   }, [plan]);
 
-  const filtered = useMemo(
-    () => RECIPES.filter((r) => r.category === category),
-    [category],
+  const loadMore = useCallback(
+    async (cat: Category, currentOffset: number, reset: boolean) => {
+      setLoading(true);
+      setError(null);
+      try {
+        const res = await fetchRecipesServerFn({
+          data: { category: cat, offset: currentOffset, number: PAGE_SIZE },
+        });
+        if (res.recipes.length === 0) {
+          setDone(true);
+        }
+        setRecipes((prev) => {
+          if (reset) return res.recipes;
+          const seen = new Set(prev.map((r) => r.id));
+          return [...prev, ...res.recipes.filter((r) => !seen.has(r.id))];
+        });
+        setOffset(currentOffset + res.recipes.length);
+      } catch (e: any) {
+        setError(e?.message ?? "Failed to load recipes");
+      } finally {
+        setLoading(false);
+      }
+    },
+    [],
   );
+
+  // Fresh feed each time category changes (or on mount): random base offset
+  useEffect(() => {
+    const base = Math.floor(Math.random() * 200);
+    baseOffsetRef.current = base;
+    setRecipes([]);
+    setOffset(base);
+    setDone(false);
+    scrollerRef.current?.scrollTo({ top: 0 });
+    loadMore(category, base, true);
+  }, [category, loadMore]);
+
+  // Infinite scroll via IntersectionObserver inside the scroll container
+  useEffect(() => {
+    const sentinel = sentinelRef.current;
+    const root = scrollerRef.current;
+    if (!sentinel || !root) return;
+    const obs = new IntersectionObserver(
+      (entries) => {
+        if (entries[0]?.isIntersecting && !loading && !done) {
+          loadMore(category, offset, false);
+        }
+      },
+      { root, rootMargin: "400px" },
+    );
+    obs.observe(sentinel);
+    return () => obs.disconnect();
+  }, [category, offset, loading, done, loadMore]);
 
   return (
     <main className="relative mx-auto h-[100dvh] max-w-md overflow-hidden bg-background">
-      {/* Snap feed */}
       <div
+        ref={scrollerRef}
         key={category}
         className="snap-feed no-scrollbar h-full overflow-y-scroll"
       >
-        {filtered.map((r, i) => (
+        {recipes.map((r, i) => (
           <RecipeCard
             key={r.id}
             recipe={r}
@@ -59,6 +120,38 @@ function Page() {
             added={inWeek.has(r.id)}
           />
         ))}
+
+        {/* Empty state while first page loads */}
+        {recipes.length === 0 && (
+          <div className="snap-item flex h-full w-full flex-col items-center justify-center gap-3 text-muted-foreground">
+            {loading ? (
+              <>
+                <Loader2 className="h-6 w-6 animate-spin text-primary" />
+                <p className="text-sm">Loading fresh recipes…</p>
+              </>
+            ) : error ? (
+              <p className="px-8 text-center text-sm text-destructive">{error}</p>
+            ) : (
+              <p className="text-sm">No recipes found.</p>
+            )}
+          </div>
+        )}
+
+        {/* Sentinel + loader for infinite scroll */}
+        {recipes.length > 0 && (
+          <div
+            ref={sentinelRef}
+            className="snap-item flex h-32 w-full items-center justify-center text-muted-foreground"
+          >
+            {loading ? (
+              <Loader2 className="h-5 w-5 animate-spin text-primary" />
+            ) : done ? (
+              <span className="text-xs">You've reached the end</span>
+            ) : (
+              <span className="text-xs">Loading more…</span>
+            )}
+          </div>
+        )}
       </div>
 
       {/* Top dock: brand + category filter */}
