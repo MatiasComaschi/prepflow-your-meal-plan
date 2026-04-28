@@ -1,6 +1,5 @@
 import { useState } from "react";
-import { Clock, Flame, Plus, Check } from "lucide-react";
-import { MacroBar } from "./MacroBar";
+import { Clock, Plus, Check } from "lucide-react";
 import { VerificationBadge } from "./VerificationBadge";
 import { RecipeImage } from "./RecipeImage";
 import type { Recipe } from "@/data/recipes";
@@ -43,14 +42,9 @@ export function RecipeCard({ recipe, eager, onOpen, added }: Props) {
           style={{ background: "var(--gradient-card)" }}
         />
 
-        {/* Top row: badge + calories */}
+        {/* Top row: verification badge */}
         <div className="absolute left-0 right-0 top-0 flex items-start justify-between p-5 pt-[calc(env(safe-area-inset-top)+4.5rem)]">
           <VerificationBadge kind={recipe.verification} />
-          <div className="flex items-center gap-1.5 rounded-full bg-black/40 px-3 py-1.5 text-xs font-semibold backdrop-blur">
-            <Flame className="h-3.5 w-3.5 text-primary" />
-            <span className="tabular-nums">{recipe.calories}</span>
-            <span className="text-muted-foreground">kcal</span>
-          </div>
         </div>
 
         {added && (
@@ -84,8 +78,19 @@ export function RecipeCard({ recipe, eager, onOpen, added }: Props) {
             </span>
           </div>
 
-          <div className="rounded-2xl border border-white/5 bg-black/30 p-4 backdrop-blur-md">
-            <MacroBar protein={recipe.protein} carbs={recipe.carbs} fat={recipe.fat} />
+          <div className="flex flex-wrap items-center gap-1.5">
+            <span className="inline-flex items-center gap-1 rounded-full bg-emerald-950/70 px-2.5 py-1.5 text-[11px] font-semibold text-white ring-1 ring-emerald-400/20 backdrop-blur-md">
+              🥩 Protein <span className="tabular-nums">{recipe.protein}g</span>
+            </span>
+            <span className="inline-flex items-center gap-1 rounded-full bg-amber-950/70 px-2.5 py-1.5 text-[11px] font-semibold text-white ring-1 ring-amber-400/20 backdrop-blur-md">
+              🌾 Carbs <span className="tabular-nums">{recipe.carbs}g</span>
+            </span>
+            <span className="inline-flex items-center gap-1 rounded-full bg-indigo-950/70 px-2.5 py-1.5 text-[11px] font-semibold text-white ring-1 ring-indigo-400/20 backdrop-blur-md">
+              🥑 Fat <span className="tabular-nums">{recipe.fat}g</span>
+            </span>
+            <span className="ml-auto inline-flex items-center gap-1 rounded-full bg-black/50 px-2.5 py-1.5 text-[11px] font-semibold text-white ring-1 ring-white/10 backdrop-blur-md">
+              🔥 <span className="tabular-nums">{recipe.calories}</span> kcal
+            </span>
           </div>
 
           <div className="flex items-center justify-center gap-2 rounded-2xl border border-primary/40 bg-black/30 px-4 py-3 text-sm font-semibold text-primary backdrop-blur-md">
