@@ -107,6 +107,7 @@ function Page() {
             offset: currentOffset,
             number: PAGE_SIZE,
             filters: filtersRef.current,
+            userId: userIdRef.current,
           },
         });
         if (res.recipes.length === 0) {
