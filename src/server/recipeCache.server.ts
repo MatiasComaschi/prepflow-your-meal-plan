@@ -176,6 +176,14 @@ export async function queryCache(
   data: QueryCacheInput,
 ): Promise<{ recipes: Recipe[] }> {
   const wantedTags = tagsFromFilters(data.filters);
+
+  // Pull seen IDs for this user (if any) and merge with explicit excludeIds.
+  const exclude = new Set<string>(data.excludeIds ?? []);
+  if (data.userId) {
+    const seen = await getSeenRecipeIds(data.userId);
+    seen.forEach((id) => exclude.add(id));
+  }
+
   let q = supabaseAdmin
     .from("cached_recipes")
     .select("*")
@@ -184,8 +192,12 @@ export async function queryCache(
   if (wantedTags.length) {
     q = q.overlaps("tags", wantedTags);
   }
-  if (data.excludeIds?.length) {
-    q = q.not("id", "in", `(${data.excludeIds.map((s) => `"${s}"`).join(",")})`);
+  if (exclude.size) {
+    q = q.not(
+      "id",
+      "in",
+      `(${Array.from(exclude).map((s) => `"${s}"`).join(",")})`,
+    );
   }
 
   const plan = data.filters?.aiPlan;
