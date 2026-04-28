@@ -88,6 +88,36 @@ function buildPrefParams(
   else if (filters.budget === "50_100") out.maxIngredients = "10";
   else if (filters.budget === "100_150") out.maxIngredients = "14";
 
+  // AI plan overrides — derive per-meal targets from daily totals
+  if (filters.aiPlan) {
+    const meals = Math.max(2, Math.min(6, filters.mealsPerDay ?? 3));
+    const perMealCals = filters.aiPlan.daily_calories / meals;
+    const perMealProtein = filters.aiPlan.protein_g / meals;
+    const perMealCarbs = filters.aiPlan.carbs_g / meals;
+    const perMealFat = filters.aiPlan.fat_g / meals;
+    const isSnack = category === "Snack";
+    const scale = isSnack ? 0.5 : 1;
+
+    out.minCalories = String(Math.max(50, Math.round(perMealCals * scale * 0.7)));
+    out.maxCalories = String(Math.round(perMealCals * scale * 1.3));
+    out.minProtein = String(Math.max(5, Math.round(perMealProtein * scale * 0.7)));
+    out.maxProtein = String(Math.round(perMealProtein * scale * 1.5));
+    out.minCarbs = String(Math.max(0, Math.round(perMealCarbs * scale * 0.4)));
+    out.maxCarbs = String(Math.round(perMealCarbs * scale * 1.6));
+    out.minFat = String(Math.max(0, Math.round(perMealFat * scale * 0.4)));
+    out.maxFat = String(Math.round(perMealFat * scale * 1.6));
+
+    if (filters.aiPlan.meal_keywords?.length) {
+      out.query = filters.aiPlan.meal_keywords.slice(0, 4).join(" ");
+    }
+    if (filters.aiPlan.avoid?.length) {
+      const avoid = filters.aiPlan.avoid.slice(0, 10).join(",");
+      out.excludeIngredients = out.excludeIngredients
+        ? `${out.excludeIngredients},${avoid}`
+        : avoid;
+    }
+  }
+
   return out;
 }
 
