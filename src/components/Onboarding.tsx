@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { ChevronLeft, ChevronRight, Check, Sparkles, Loader2 } from "lucide-react";
+import { AIOrb } from "@/components/onboarding/AIOrb";
 import {
   usePreferences,
   GOAL_OPTIONS,
@@ -30,6 +31,8 @@ export function Onboarding() {
   const [phaseIdx, setPhaseIdx] = useState(0);
   const [analyzing, setAnalyzing] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [pulseKey, setPulseKey] = useState(0);
+  const [completing, setCompleting] = useState(false);
 
   if (!ready) return null;
   if (prefs.onboarded) return null;
@@ -39,16 +42,21 @@ export function Onboarding() {
 
   const next = async () => {
     setError(null);
+    setPulseKey((k) => k + 1);
     if (!isLast) {
       setPhaseIdx((i) => i + 1);
       return;
     }
     setAnalyzing(true);
+    setCompleting(true);
     try {
       const res = await analyzeGoalServerFn({
         data: { profile: draftToProfile(draft) },
       });
       if (res.error) setError(res.error);
+      // Hold the completion animation for ~2s minimum for the orb finale
+      const minDelay = new Promise((r) => setTimeout(r, 2000));
+      await minDelay;
       await setPrefs({ ...draft, aiPlan: res.plan ?? null, onboarded: true });
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : "AI analysis failed";
@@ -56,6 +64,7 @@ export function Onboarding() {
       await setPrefs({ ...draft, aiPlan: null, onboarded: true });
     } finally {
       setAnalyzing(false);
+      setCompleting(false);
     }
   };
 
@@ -84,6 +93,16 @@ export function Onboarding() {
           <div className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
             {phaseTitle}
           </div>
+        </div>
+
+        {/* Persistent AI orb */}
+        <div className="mt-4 flex justify-center">
+          <AIOrb
+            phase={phaseIdx as 0 | 1 | 2 | 3 | 4}
+            pulseKey={pulseKey}
+            completing={completing}
+            captionOverride={completing ? "your AI is ready" : undefined}
+          />
         </div>
 
         <div className="mt-3 flex-1 overflow-y-auto no-scrollbar">
