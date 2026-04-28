@@ -77,8 +77,15 @@ function RootComponent() {
     <PreferencesProvider>
       <PlannerProvider>
         <Outlet />
-        <Onboarding />
+        <AuthGate />
       </PlannerProvider>
     </PreferencesProvider>
   );
+}
+
+function AuthGate() {
+  const { signedIn, ready } = usePreferences();
+  if (!ready) return null;
+  if (!signedIn) return <AuthScreen />;
+  return <Onboarding />;
 }
