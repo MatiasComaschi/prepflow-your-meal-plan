@@ -73,8 +73,11 @@ function RootShell({ children }: { children: React.ReactNode }) {
 
 function RootComponent() {
   return (
-    <PlannerProvider>
-      <Outlet />
-    </PlannerProvider>
+    <PreferencesProvider>
+      <PlannerProvider>
+        <Outlet />
+        <Onboarding />
+      </PlannerProvider>
+    </PreferencesProvider>
   );
 }
