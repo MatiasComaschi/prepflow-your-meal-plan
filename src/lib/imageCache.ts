@@ -1,7 +1,7 @@
 import { generateRecipeImageServerFn } from "@/server/images";
 
-const STORAGE_KEY = "prepflow:img-cache:v1";
-const MAX_ENTRIES = 80;
+const STORAGE_KEY = "prepflow:img-cache:v2";
+const MAX_ENTRIES = 200;
 
 type CacheMap = Record<string, string>;
 
@@ -26,14 +26,12 @@ function load(): CacheMap {
 function persist() {
   if (typeof window === "undefined" || !memCache) return;
   try {
-    // Trim to MAX_ENTRIES (drop oldest by insertion order)
     const entries = Object.entries(memCache);
     if (entries.length > MAX_ENTRIES) {
       memCache = Object.fromEntries(entries.slice(-MAX_ENTRIES));
     }
     window.localStorage.setItem(STORAGE_KEY, JSON.stringify(memCache));
   } catch {
-    // quota exceeded — drop half and retry once
     try {
       const entries = Object.entries(memCache!);
       memCache = Object.fromEntries(entries.slice(-Math.floor(MAX_ENTRIES / 2)));
@@ -48,8 +46,10 @@ export function getCachedImage(key: string): string | null {
   return load()[key] ?? null;
 }
 
-export function buildRecipePrompt(name: string): string {
-  return `professional food photography of ${name}, overhead shot, dark moody background, restaurant quality plating, natural lighting, 4k`;
+export function setCachedImage(key: string, url: string) {
+  const cache = load();
+  cache[key] = url;
+  persist();
 }
 
 export async function getOrGenerateRecipeImage(
@@ -64,7 +64,7 @@ export async function getOrGenerateRecipeImage(
 
   const p = (async () => {
     const { url } = await generateRecipeImageServerFn({
-      data: { prompt: buildRecipePrompt(recipeName) },
+      data: { recipeId, recipeName },
     });
     if (!url) throw new Error("no_image");
     cache[recipeId] = url;

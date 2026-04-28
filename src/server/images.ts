@@ -1,61 +1,95 @@
 import { createServerFn } from "@tanstack/react-start";
+import { supabaseAdmin } from "@/integrations/supabase/client.server";
 
-type GenerateInput = { prompt: string };
+const BUCKET = "recipe-images";
+
+function publicUrl(path: string): string {
+  const { data } = supabaseAdmin.storage.from(BUCKET).getPublicUrl(path);
+  return data.publicUrl;
+}
+
+function buildPrompt(name: string): string {
+  return `professional food photography of ${name}, overhead shot, dark moody background, restaurant quality plating, natural lighting, 4k`;
+}
+
+async function checkExisting(recipeId: string): Promise<string | null> {
+  const fileName = `${recipeId}.png`;
+  const { data, error } = await supabaseAdmin.storage
+    .from(BUCKET)
+    .list("", { search: fileName, limit: 1 });
+  if (error) {
+    console.error("storage list error", error.message);
+    return null;
+  }
+  if (data?.some((f) => f.name === fileName)) return publicUrl(fileName);
+  return null;
+}
+
+async function callImageModel(prompt: string): Promise<string | null> {
+  const apiKey = process.env.LOVABLE_API_KEY;
+  if (!apiKey) return null;
+  const res = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${apiKey}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      model: "google/gemini-2.5-flash-image",
+      messages: [{ role: "user", content: prompt }],
+      modalities: ["image", "text"],
+    }),
+  });
+  if (!res.ok) {
+    console.error(`Image model ${res.status}`, (await res.text()).slice(0, 300));
+    return null;
+  }
+  const json: any = await res.json();
+  return json.choices?.[0]?.message?.images?.[0]?.image_url?.url ?? null;
+}
+
+async function uploadDataUrl(recipeId: string, dataUrl: string): Promise<string | null> {
+  const m = /^data:(image\/[a-z+]+);base64,(.+)$/i.exec(dataUrl);
+  if (!m) {
+    console.error("Unexpected image url format");
+    return null;
+  }
+  const contentType = m[1];
+  const bytes = Uint8Array.from(atob(m[2]), (c) => c.charCodeAt(0));
+  const fileName = `${recipeId}.png`;
+  const { error } = await supabaseAdmin.storage
+    .from(BUCKET)
+    .upload(fileName, bytes, { contentType, upsert: true });
+  if (error) {
+    console.error("storage upload error", error.message);
+    return null;
+  }
+  return publicUrl(fileName);
+}
+
+/**
+ * Get-or-generate a permanent recipe image. Each recipe ID gets exactly one image
+ * across all users, forever (until manually purged).
+ */
+export async function getOrGenerateImage(
+  recipeId: string,
+  recipeName: string,
+): Promise<string | null> {
+  const cached = await checkExisting(recipeId);
+  if (cached) return cached;
+
+  const generated = await callImageModel(buildPrompt(recipeName));
+  if (!generated) return null;
+  return await uploadDataUrl(recipeId, generated);
+}
 
 export const generateRecipeImageServerFn = createServerFn({ method: "POST" })
-  .inputValidator((data: GenerateInput) => {
-    if (!data || typeof data.prompt !== "string" || data.prompt.length === 0) {
-      throw new Error("prompt is required");
-    }
-    if (data.prompt.length > 1000) {
-      throw new Error("prompt too long");
-    }
+  .inputValidator((data: { recipeId: string; recipeName: string }) => {
+    if (!data?.recipeId || !data?.recipeName) throw new Error("recipeId and recipeName required");
+    if (data.recipeId.length > 200 || data.recipeName.length > 300) throw new Error("too long");
     return data;
   })
   .handler(async ({ data }) => {
-    const apiKey = process.env.LOVABLE_API_KEY;
-    if (!apiKey) {
-      console.error("LOVABLE_API_KEY not configured");
-      return { url: null as string | null, error: "no_api_key" };
-    }
-
-    try {
-      const res = await fetch(
-        "https://ai.gateway.lovable.dev/v1/chat/completions",
-        {
-          method: "POST",
-          headers: {
-            Authorization: `Bearer ${apiKey}`,
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            model: "google/gemini-2.5-flash-image",
-            messages: [{ role: "user", content: data.prompt }],
-            modalities: ["image", "text"],
-          }),
-        },
-      );
-
-      if (!res.ok) {
-        const txt = await res.text().catch(() => "");
-        console.error(`Lovable AI image error ${res.status}:`, txt.slice(0, 300));
-        return { url: null, error: `lovable_${res.status}` };
-      }
-
-      const json = (await res.json()) as {
-        choices?: Array<{
-          message?: {
-            images?: Array<{ image_url?: { url?: string } }>;
-          };
-        }>;
-      };
-      const url = json.choices?.[0]?.message?.images?.[0]?.image_url?.url;
-      if (!url) {
-        return { url: null, error: "no_image" };
-      }
-      return { url, error: null };
-    } catch (e) {
-      console.error("Image generation failed:", e);
-      return { url: null, error: "exception" };
-    }
+    const url = await getOrGenerateImage(data.recipeId, data.recipeName);
+    return { url, error: url ? null : "failed" };
   });

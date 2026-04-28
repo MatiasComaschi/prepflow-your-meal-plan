@@ -12,6 +12,7 @@ import { Route as rootRouteImport } from './routes/__root'
 import { Route as SettingsRouteImport } from './routes/settings'
 import { Route as PlannerRouteImport } from './routes/planner'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as ApiPublicHooksRecipeMaintenanceRouteImport } from './routes/api/public/hooks/recipe-maintenance'
 
 const SettingsRoute = SettingsRouteImport.update({
   id: '/settings',
@@ -28,35 +29,54 @@ const IndexRoute = IndexRouteImport.update({
   path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiPublicHooksRecipeMaintenanceRoute =
+  ApiPublicHooksRecipeMaintenanceRouteImport.update({
+    id: '/api/public/hooks/recipe-maintenance',
+    path: '/api/public/hooks/recipe-maintenance',
+    getParentRoute: () => rootRouteImport,
+  } as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/planner': typeof PlannerRoute
   '/settings': typeof SettingsRoute
+  '/api/public/hooks/recipe-maintenance': typeof ApiPublicHooksRecipeMaintenanceRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/planner': typeof PlannerRoute
   '/settings': typeof SettingsRoute
+  '/api/public/hooks/recipe-maintenance': typeof ApiPublicHooksRecipeMaintenanceRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/planner': typeof PlannerRoute
   '/settings': typeof SettingsRoute
+  '/api/public/hooks/recipe-maintenance': typeof ApiPublicHooksRecipeMaintenanceRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/planner' | '/settings'
+  fullPaths:
+    | '/'
+    | '/planner'
+    | '/settings'
+    | '/api/public/hooks/recipe-maintenance'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/planner' | '/settings'
-  id: '__root__' | '/' | '/planner' | '/settings'
+  to: '/' | '/planner' | '/settings' | '/api/public/hooks/recipe-maintenance'
+  id:
+    | '__root__'
+    | '/'
+    | '/planner'
+    | '/settings'
+    | '/api/public/hooks/recipe-maintenance'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   PlannerRoute: typeof PlannerRoute
   SettingsRoute: typeof SettingsRoute
+  ApiPublicHooksRecipeMaintenanceRoute: typeof ApiPublicHooksRecipeMaintenanceRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -82,6 +102,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/public/hooks/recipe-maintenance': {
+      id: '/api/public/hooks/recipe-maintenance'
+      path: '/api/public/hooks/recipe-maintenance'
+      fullPath: '/api/public/hooks/recipe-maintenance'
+      preLoaderRoute: typeof ApiPublicHooksRecipeMaintenanceRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
@@ -89,6 +116,7 @@ const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   PlannerRoute: PlannerRoute,
   SettingsRoute: SettingsRoute,
+  ApiPublicHooksRecipeMaintenanceRoute: ApiPublicHooksRecipeMaintenanceRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

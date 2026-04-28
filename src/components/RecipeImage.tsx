@@ -1,29 +1,42 @@
 import { useEffect, useState } from "react";
-import { getCachedImage, getOrGenerateRecipeImage } from "@/lib/imageCache";
+import { getCachedImage, getOrGenerateRecipeImage, setCachedImage } from "@/lib/imageCache";
 
 type Props = {
   recipeId: string;
   recipeName: string;
+  /** Pre-generated image URL from server cache (Supabase storage). Preferred. */
+  preferred?: string;
   fallback?: string;
   alt: string;
   eager?: boolean;
   className?: string;
 };
 
+function isUsable(url?: string | null): url is string {
+  return !!url && url.length > 0 && !url.startsWith("data:");
+}
+
 export function RecipeImage({
   recipeId,
   recipeName,
+  preferred,
   fallback,
   alt,
   eager,
   className,
 }: Props) {
-  const cached = getCachedImage(recipeId);
-  const [src, setSrc] = useState<string | null>(cached);
-  const [loaded, setLoaded] = useState<boolean>(Boolean(cached));
+  const initial =
+    (isUsable(preferred) ? preferred : null) ?? getCachedImage(recipeId);
+  const [src, setSrc] = useState<string | null>(initial);
+  const [loaded, setLoaded] = useState<boolean>(Boolean(initial));
 
   useEffect(() => {
     let cancelled = false;
+    if (isUsable(preferred)) {
+      setCachedImage(recipeId, preferred);
+      setSrc(preferred);
+      return;
+    }
     const existing = getCachedImage(recipeId);
     if (existing) {
       setSrc(existing);
@@ -41,7 +54,7 @@ export function RecipeImage({
     return () => {
       cancelled = true;
     };
-  }, [recipeId, recipeName, fallback]);
+  }, [recipeId, recipeName, preferred, fallback]);
 
   return (
     <div className={`absolute inset-0 overflow-hidden ${className ?? ""}`}>
