@@ -1,6 +1,4 @@
-import { Canvas, useFrame } from "@react-three/fiber";
-import { useMemo, useRef, useEffect, useState } from "react";
-import * as THREE from "three";
+import { useEffect, useId, useRef, useState } from "react";
 
 type Phase = 0 | 1 | 2 | 3 | 4;
 
@@ -12,14 +10,6 @@ const PHASE_TEXT = [
   "almost ready",
 ];
 
-const PHASE_COLORS = [
-  "#7dd3fc", // Phase 1 cyan
-  "#a5f3fc", // Phase 2
-  "#6ee7b7", // Phase 3 green-cyan
-  "#34d399", // Phase 4
-  "#c8f461", // Phase 5 accent
-];
-
 interface AIOrbProps {
   phase: Phase;
   pulseKey: number;
@@ -27,287 +17,386 @@ interface AIOrbProps {
   captionOverride?: string;
 }
 
-// ---- Custom shader: fresnel + noise distortion ----
-const orbVertex = /* glsl */ `
-  varying vec3 vNormal;
-  varying vec3 vViewPosition;
-  varying vec3 vWorldPosition;
-  uniform float uTime;
-  uniform float uDistort;
-
-  // 3D simplex-ish noise (cheap)
-  vec3 mod289(vec3 x){return x - floor(x * (1.0/289.0)) * 289.0;}
-  vec4 mod289(vec4 x){return x - floor(x * (1.0/289.0)) * 289.0;}
-  vec4 permute(vec4 x){return mod289(((x*34.0)+1.0)*x);}
-  vec4 taylorInvSqrt(vec4 r){return 1.79284291400159 - 0.85373472095314 * r;}
-
-  float snoise(vec3 v){
-    const vec2 C = vec2(1.0/6.0, 1.0/3.0);
-    const vec4 D = vec4(0.0, 0.5, 1.0, 2.0);
-    vec3 i = floor(v + dot(v, C.yyy));
-    vec3 x0 = v - i + dot(i, C.xxx);
-    vec3 g = step(x0.yzx, x0.xyz);
-    vec3 l = 1.0 - g;
-    vec3 i1 = min(g.xyz, l.zxy);
-    vec3 i2 = max(g.xyz, l.zxy);
-    vec3 x1 = x0 - i1 + C.xxx;
-    vec3 x2 = x0 - i2 + C.yyy;
-    vec3 x3 = x0 - D.yyy;
-    i = mod289(i);
-    vec4 p = permute(permute(permute(
-              i.z + vec4(0.0, i1.z, i2.z, 1.0))
-            + i.y + vec4(0.0, i1.y, i2.y, 1.0))
-            + i.x + vec4(0.0, i1.x, i2.x, 1.0));
-    float n_ = 0.142857142857;
-    vec3 ns = n_ * D.wyz - D.xzx;
-    vec4 j = p - 49.0 * floor(p * ns.z * ns.z);
-    vec4 x_ = floor(j * ns.z);
-    vec4 y_ = floor(j - 7.0 * x_);
-    vec4 x = x_ * ns.x + ns.yyyy;
-    vec4 y = y_ * ns.x + ns.yyyy;
-    vec4 h = 1.0 - abs(x) - abs(y);
-    vec4 b0 = vec4(x.xy, y.xy);
-    vec4 b1 = vec4(x.zw, y.zw);
-    vec4 s0 = floor(b0)*2.0 + 1.0;
-    vec4 s1 = floor(b1)*2.0 + 1.0;
-    vec4 sh = -step(h, vec4(0.0));
-    vec4 a0 = b0.xzyw + s0.xzyw*sh.xxyy;
-    vec4 a1 = b1.xzyw + s1.xzyw*sh.zzww;
-    vec3 p0 = vec3(a0.xy, h.x);
-    vec3 p1 = vec3(a0.zw, h.y);
-    vec3 p2 = vec3(a1.xy, h.z);
-    vec3 p3 = vec3(a1.zw, h.w);
-    vec4 norm = taylorInvSqrt(vec4(dot(p0,p0), dot(p1,p1), dot(p2,p2), dot(p3,p3)));
-    p0 *= norm.x; p1 *= norm.y; p2 *= norm.z; p3 *= norm.w;
-    vec4 m = max(0.6 - vec4(dot(x0,x0), dot(x1,x1), dot(x2,x2), dot(x3,x3)), 0.0);
-    m = m * m;
-    return 42.0 * dot(m*m, vec4(dot(p0,x0), dot(p1,x1), dot(p2,x2), dot(p3,x3)));
-  }
-
-  void main() {
-    vNormal = normalize(normalMatrix * normal);
-    float n = snoise(normal * 1.6 + uTime * 0.35);
-    vec3 displaced = position + normal * n * uDistort;
-    vec4 mvPosition = modelViewMatrix * vec4(displaced, 1.0);
-    vWorldPosition = (modelMatrix * vec4(displaced, 1.0)).xyz;
-    vViewPosition = -mvPosition.xyz;
-    gl_Position = projectionMatrix * mvPosition;
-  }
-`;
-
-const orbFragment = /* glsl */ `
-  varying vec3 vNormal;
-  varying vec3 vViewPosition;
-  uniform vec3 uColor;
-  uniform float uTime;
-  uniform float uEmissive;
-
-  void main() {
-    vec3 viewDir = normalize(vViewPosition);
-    float fresnel = pow(1.0 - max(dot(normalize(vNormal), viewDir), 0.0), 2.5);
-
-    vec3 base = uColor * 0.55;
-    vec3 edge = uColor * (1.4 + 0.5 * sin(uTime * 0.8));
-    vec3 col = mix(base, edge, fresnel);
-    col += uColor * uEmissive * (0.5 + fresnel);
-
-    float alpha = 0.85 + fresnel * 0.15;
-    gl_FragColor = vec4(col, alpha);
-  }
-`;
-
-function Orb({
-  phase,
-  pulseKey,
-  completing,
-}: {
-  phase: Phase;
-  pulseKey: number;
-  completing: boolean;
-}) {
-  const meshRef = useRef<THREE.Mesh>(null);
-  const matRef = useRef<THREE.ShaderMaterial>(null);
-  const targetColor = useMemo(() => new THREE.Color(PHASE_COLORS[phase]), [phase]);
-  const currentColor = useRef(new THREE.Color(PHASE_COLORS[phase]));
-
-  // Pulse animation state
-  const pulseStart = useRef<number | null>(null);
-  useEffect(() => {
-    if (pulseKey === 0) return;
-    pulseStart.current = performance.now();
-  }, [pulseKey]);
-
-  // Completion boost
-  const completionStart = useRef<number | null>(null);
-  useEffect(() => {
-    if (completing) completionStart.current = performance.now();
-    else completionStart.current = null;
-  }, [completing]);
-
-  const uniforms = useMemo(
-    () => ({
-      uTime: { value: 0 },
-      uDistort: { value: 0.12 },
-      uColor: { value: currentColor.current.clone() },
-      uEmissive: { value: 0 },
-    }),
-    [],
-  );
-
-  useFrame((_, delta) => {
-    const mesh = meshRef.current;
-    if (!mesh) return;
-
-    // Slow Y rotation
-    mesh.rotation.y += 0.002 * 60 * delta; // normalize per-frame target ~0.002/frame at 60fps
-
-    // Color lerp
-    currentColor.current.lerp(targetColor, Math.min(1, delta * 3));
-    uniforms.uColor.value.copy(currentColor.current);
-
-    // Time
-    uniforms.uTime.value += delta;
-
-    // Pulse scale (1.0 -> 1.15 -> 1.0 over 400ms)
-    let scale = 1;
-    if (pulseStart.current != null) {
-      const t = (performance.now() - pulseStart.current) / 400;
-      if (t >= 1) {
-        pulseStart.current = null;
-      } else {
-        // smooth ease in/out, peak at 0.5
-        const eased = Math.sin(t * Math.PI);
-        scale = 1 + 0.15 * eased;
-      }
-    }
-
-    // Emissive boost on pulse + completion
-    let emissive = 0;
-    if (pulseStart.current != null) {
-      const t = (performance.now() - pulseStart.current) / 400;
-      emissive = Math.max(0, Math.sin(t * Math.PI) * 0.6);
-    }
-    if (completionStart.current != null) {
-      const t = (performance.now() - completionStart.current) / 2000;
-      if (t < 1) {
-        emissive = Math.max(emissive, 0.4 + 0.6 * Math.sin(t * Math.PI * 3));
-        scale *= 1 + 0.08 * Math.sin(t * Math.PI * 3);
-      }
-    }
-
-    mesh.scale.setScalar(scale);
-    uniforms.uEmissive.value = emissive;
-  });
-
-  return (
-    <mesh ref={meshRef}>
-      <icosahedronGeometry args={[1, 4]} />
-      <shaderMaterial
-        ref={matRef}
-        uniforms={uniforms}
-        vertexShader={orbVertex}
-        fragmentShader={orbFragment}
-        transparent
-      />
-    </mesh>
-  );
-}
-
-function Particles({ phase }: { phase: Phase }) {
-  const count = 200 + phase * 50;
-  const pointsRef = useRef<THREE.Points>(null);
-
-  const { positions, drift } = useMemo(() => {
-    const positions = new Float32Array(count * 3);
-    const drift = new Float32Array(count * 3);
-    for (let i = 0; i < count; i++) {
-      // Random point in spherical shell
-      const r = 1.6 + Math.random() * 1.4;
-      const theta = Math.random() * Math.PI * 2;
-      const phi = Math.acos(2 * Math.random() - 1);
-      positions[i * 3 + 0] = r * Math.sin(phi) * Math.cos(theta);
-      positions[i * 3 + 1] = r * Math.sin(phi) * Math.sin(theta);
-      positions[i * 3 + 2] = r * Math.cos(phi);
-      drift[i * 3 + 0] = (Math.random() - 0.5) * 0.05;
-      drift[i * 3 + 1] = (Math.random() - 0.5) * 0.05;
-      drift[i * 3 + 2] = (Math.random() - 0.5) * 0.05;
-    }
-    return { positions, drift };
-  }, [count]);
-
-  const color = useMemo(() => new THREE.Color(PHASE_COLORS[phase]), [phase]);
-
-  useFrame((_, delta) => {
-    const points = pointsRef.current;
-    if (!points) return;
-    points.rotation.y += delta * 0.05;
-    const attr = points.geometry.attributes.position as THREE.BufferAttribute;
-    const arr = attr.array as Float32Array;
-    for (let i = 0; i < count; i++) {
-      arr[i * 3 + 0] += drift[i * 3 + 0] * delta;
-      arr[i * 3 + 1] += drift[i * 3 + 1] * delta;
-      arr[i * 3 + 2] += drift[i * 3 + 2] * delta;
-      // Pull back if drifted too far
-      const x = arr[i * 3], y = arr[i * 3 + 1], z = arr[i * 3 + 2];
-      const d = Math.sqrt(x * x + y * y + z * z);
-      if (d > 3.2 || d < 1.4) {
-        drift[i * 3 + 0] *= -1;
-        drift[i * 3 + 1] *= -1;
-        drift[i * 3 + 2] *= -1;
-      }
-    }
-    attr.needsUpdate = true;
-  });
-
-  return (
-    <points ref={pointsRef}>
-      <bufferGeometry>
-        <bufferAttribute
-          attach="attributes-position"
-          args={[positions, 3]}
-          count={count}
-          array={positions}
-          itemSize={3}
-        />
-      </bufferGeometry>
-      <pointsMaterial
-        size={0.035}
-        color={color}
-        transparent
-        opacity={0.75}
-        sizeAttenuation
-        depthWrite={false}
-        blending={THREE.AdditiveBlending}
-      />
-    </points>
-  );
-}
-
 export function AIOrb({ phase, pulseKey, completing = false, captionOverride }: AIOrbProps) {
   const caption = captionOverride ?? PHASE_TEXT[phase];
-  // Keep client-only to avoid SSR issues with WebGL
-  const [mounted, setMounted] = useState(false);
-  useEffect(() => setMounted(true), []);
+  const noiseId = useId().replace(/:/g, "");
+  const orbRef = useRef<HTMLDivElement>(null);
+  const [pulse, setPulse] = useState(false);
+
+  // Pulse trigger
+  useEffect(() => {
+    if (pulseKey === 0) return;
+    setPulse(true);
+    const t = setTimeout(() => setPulse(false), 700);
+    return () => clearTimeout(t);
+  }, [pulseKey]);
+
+  // Pre-compute particle positions
+  const particles = Array.from({ length: 8 }, (_, i) => {
+    const angle = (i / 8) * Math.PI * 2;
+    const r = 95 + (i % 3) * 12;
+    return {
+      left: 175 + Math.cos(angle) * r,
+      top: 175 + Math.sin(angle) * r,
+      dur: 7 + (i % 7),
+      delay: -i * 0.8,
+      dx: Math.cos(angle) * 14,
+      dy: Math.sin(angle) * 14,
+    };
+  });
 
   return (
-    <div className="pointer-events-none relative flex w-full flex-col items-center">
-      <div style={{ width: 280, height: 280 }}>
-        {mounted && (
-          <Canvas
-            camera={{ position: [0, 0, 5], fov: 45 }}
-            gl={{ alpha: true, antialias: true }}
-            style={{ background: "transparent" }}
-          >
-            <ambientLight intensity={0.6} />
-            <pointLight position={[5, 5, 5]} color="#7dd3fc" intensity={1.2} />
-            <Orb phase={phase} pulseKey={pulseKey} completing={completing} />
-            <Particles phase={phase} />
-          </Canvas>
-        )}
+    <div className="pointer-events-none relative flex w-full flex-col items-center select-none">
+      {/* Frame */}
+      <div
+        className={`relative overflow-hidden rounded-2xl ${completing ? "orb-completing" : ""}`}
+        style={{
+          width: 350,
+          height: 350,
+          background:
+            "radial-gradient(circle at 50% 50%, rgba(200,244,97,0.06) 0%, #0c0d0a 35%, #040506 100%)",
+        }}
+      >
+        {/* Top progress bars */}
+        <div className="absolute left-0 right-0 top-3 z-30 flex justify-center gap-1.5 px-6">
+          {[0, 1, 2, 3, 4].map((i) => (
+            <div
+              key={i}
+              className="h-[2px] flex-1 rounded-full transition-all duration-500"
+              style={{
+                background:
+                  i <= phase
+                    ? "linear-gradient(90deg, #c8f461, #6ee7b7)"
+                    : "rgba(255,255,255,0.08)",
+                boxShadow: i <= phase ? "0 0 6px rgba(200,244,97,0.5)" : "none",
+                maxWidth: 38,
+              }}
+            />
+          ))}
+        </div>
+
+        {/* Grain overlay */}
+        <svg
+          className="pointer-events-none absolute inset-0 h-full w-full"
+          style={{ mixBlendMode: "overlay", opacity: 0.12 }}
+          aria-hidden
+        >
+          <filter id={`grain-${noiseId}`}>
+            <feTurbulence type="fractalNoise" baseFrequency="0.9" numOctaves="2" stitchTiles="stitch" />
+            <feColorMatrix type="saturate" values="0" />
+          </filter>
+          <rect width="100%" height="100%" filter={`url(#grain-${noiseId})`} />
+        </svg>
+
+        {/* Outer glow 400px */}
+        <div
+          className="absolute orb-glow-outer"
+          style={{
+            width: 400,
+            height: 400,
+            left: "50%",
+            top: "50%",
+            transform: "translate(-50%, -50%)",
+            background: "radial-gradient(circle, rgba(200,244,97,0.08) 0%, transparent 65%)",
+            filter: "blur(20px)",
+          }}
+        />
+
+        {/* Mid glow 240px */}
+        <div
+          className="absolute orb-glow-mid"
+          style={{
+            width: 240,
+            height: 240,
+            left: "50%",
+            top: "50%",
+            transform: "translate(-50%, -50%)",
+            background: "radial-gradient(circle, rgba(200,244,97,0.14) 0%, transparent 60%)",
+            filter: "blur(16px)",
+          }}
+        />
+
+        {/* Outer rotating ring 200px */}
+        <div
+          className="absolute orb-ring-outer"
+          style={{
+            width: 200,
+            height: 200,
+            left: "50%",
+            top: "50%",
+            marginLeft: -100,
+            marginTop: -100,
+            border: "1px solid rgba(200,244,97,0.12)",
+            borderRadius: "50%",
+          }}
+        >
+          <div
+            className="absolute"
+            style={{
+              width: 6,
+              height: 6,
+              borderRadius: "50%",
+              background: "#c8f461",
+              boxShadow: "0 0 12px #c8f461, 0 0 4px #c8f461",
+              top: -3,
+              left: "50%",
+              marginLeft: -3,
+            }}
+          />
+        </div>
+
+        {/* Inner rotating ring 175px */}
+        <div
+          className="absolute orb-ring-inner"
+          style={{
+            width: 175,
+            height: 175,
+            left: "50%",
+            top: "50%",
+            marginLeft: -87.5,
+            marginTop: -87.5,
+            border: "1px solid rgba(110,231,183,0.12)",
+            borderRadius: "50%",
+          }}
+        >
+          <div
+            className="absolute"
+            style={{
+              width: 4,
+              height: 4,
+              borderRadius: "50%",
+              background: "#6ee7b7",
+              boxShadow: "0 0 10px #6ee7b7",
+              top: -2,
+              left: "50%",
+              marginLeft: -2,
+            }}
+          />
+        </div>
+
+        {/* The orb */}
+        <div
+          ref={orbRef}
+          className={`absolute ${pulse ? "orb-pulse" : ""}`}
+          style={{
+            width: 150,
+            height: 150,
+            left: "50%",
+            top: "50%",
+            marginLeft: -75,
+            marginTop: -75,
+            borderRadius: "50%",
+            overflow: "hidden",
+            background: "radial-gradient(circle at 50% 55%, #1a1d14 0%, #050604 100%)",
+            boxShadow:
+              "0 0 60px rgba(200,244,97,0.25), inset 0 0 30px rgba(0,0,0,0.6)",
+          }}
+        >
+          {/* Aurora 1 - lime */}
+          <div
+            className="absolute inset-0 orb-aurora-1"
+            style={{
+              background:
+                "radial-gradient(ellipse 70% 50% at 35% 40%, #c8f461 0%, transparent 55%), radial-gradient(ellipse 60% 70% at 65% 60%, #84cc16 0%, transparent 60%)",
+              mixBlendMode: "screen",
+              opacity: 0.85,
+            }}
+          />
+          {/* Aurora 2 - mint */}
+          <div
+            className="absolute inset-0 orb-aurora-2"
+            style={{
+              background:
+                "radial-gradient(ellipse 65% 55% at 60% 35%, #6ee7b7 0%, transparent 55%), radial-gradient(ellipse 55% 65% at 30% 65%, #34d399 0%, transparent 60%)",
+              mixBlendMode: "screen",
+              opacity: 0.7,
+            }}
+          />
+          {/* Aurora 3 - white highlight */}
+          <div
+            className="absolute inset-0 orb-aurora-3"
+            style={{
+              background:
+                "radial-gradient(ellipse 35% 25% at 40% 30%, rgba(255,255,255,0.9) 0%, transparent 60%)",
+              mixBlendMode: "screen",
+              opacity: 0.6,
+            }}
+          />
+          {/* Rim light top-left */}
+          <div
+            className="pointer-events-none absolute inset-0"
+            style={{
+              background:
+                "radial-gradient(circle at 30% 25%, rgba(255,255,255,0.3) 0%, transparent 35%)",
+              borderRadius: "50%",
+            }}
+          />
+          {/* Inner shadow edges */}
+          <div
+            className="pointer-events-none absolute inset-0"
+            style={{
+              background:
+                "radial-gradient(circle at 50% 50%, transparent 55%, rgba(0,0,0,0.55) 95%)",
+              borderRadius: "50%",
+            }}
+          />
+        </div>
+
+        {/* Ground shadow */}
+        <div
+          className="pointer-events-none absolute"
+          style={{
+            width: 180,
+            height: 30,
+            left: "50%",
+            top: "50%",
+            marginLeft: -90,
+            marginTop: 70,
+            background:
+              "radial-gradient(ellipse, rgba(0,0,0,0.6) 0%, transparent 70%)",
+            filter: "blur(8px)",
+          }}
+        />
+
+        {/* Particles */}
+        {particles.map((p, i) => (
+          <div
+            key={i}
+            className="absolute orb-particle"
+            style={
+              {
+                width: 2,
+                height: 2,
+                borderRadius: "50%",
+                background: "#c8f461",
+                boxShadow: "0 0 6px #c8f461, 0 0 2px #c8f461",
+                left: p.left,
+                top: p.top,
+                animationDuration: `${p.dur}s`,
+                animationDelay: `${p.delay}s`,
+                ["--dx" as string]: `${p.dx}px`,
+                ["--dy" as string]: `${p.dy}px`,
+              } as React.CSSProperties
+            }
+          />
+        ))}
+
+        {/* Bottom label */}
+        <div className="absolute bottom-5 left-0 right-0 z-20 flex items-center justify-center gap-2">
+          <span
+            className="orb-status-dot"
+            style={{
+              width: 6,
+              height: 6,
+              borderRadius: "50%",
+              background: "#c8f461",
+              boxShadow: "0 0 8px #c8f461",
+              display: "inline-block",
+            }}
+          />
+          <div className="relative">
+            <div
+              aria-hidden
+              className="absolute inset-0 orb-label-glow"
+              style={{
+                color: "#c8f461",
+                filter: "blur(6px)",
+                fontFamily:
+                  '"JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace',
+                fontSize: 10,
+                letterSpacing: "0.4em",
+                textTransform: "lowercase",
+              }}
+            >
+              {caption}
+            </div>
+            <div
+              className="relative"
+              style={{
+                color: "rgba(255,255,255,0.85)",
+                fontFamily:
+                  '"JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace',
+                fontSize: 10,
+                letterSpacing: "0.4em",
+                textTransform: "lowercase",
+              }}
+            >
+              {caption}
+            </div>
+          </div>
+        </div>
       </div>
-      <div className="-mt-2 text-[11px] font-light lowercase tracking-[0.25em] text-muted-foreground/60">
-        {caption}
-      </div>
+
+      <style>{`
+        @keyframes orb-glow-pulse {
+          0%, 100% { transform: translate(-50%, -50%) scale(1); opacity: 0.85; }
+          50% { transform: translate(-50%, -50%) scale(1.05); opacity: 1; }
+        }
+        @keyframes orb-glow-pulse-mid {
+          0%, 100% { transform: translate(-50%, -50%) scale(1); opacity: 0.9; }
+          50% { transform: translate(-50%, -50%) scale(1.04); opacity: 1; }
+        }
+        .orb-glow-outer { animation: orb-glow-pulse 6s ease-in-out infinite; }
+        .orb-glow-mid { animation: orb-glow-pulse-mid 5s ease-in-out infinite; }
+
+        @keyframes orb-spin { to { transform: rotate(360deg); } }
+        @keyframes orb-spin-rev { to { transform: rotate(-360deg); } }
+        .orb-ring-outer { animation: orb-spin 30s linear infinite; }
+        .orb-ring-inner { animation: orb-spin-rev 20s linear infinite; }
+
+        @keyframes orb-aurora-1 {
+          0%, 100% { transform: translate(0, 0) rotate(0deg) scale(1); }
+          50% { transform: translate(8%, -6%) rotate(180deg) scale(1.1); }
+        }
+        @keyframes orb-aurora-2 {
+          0%, 100% { transform: translate(0, 0) rotate(0deg) scale(1); }
+          50% { transform: translate(-6%, 8%) rotate(-160deg) scale(1.08); }
+        }
+        @keyframes orb-aurora-3 {
+          0%, 100% { transform: translate(0, 0) rotate(0deg) scale(1); opacity: 0.6; }
+          50% { transform: translate(4%, 2%) rotate(40deg) scale(1.15); opacity: 0.85; }
+        }
+        .orb-aurora-1 { animation: orb-aurora-1 8s ease-in-out infinite; }
+        .orb-aurora-2 { animation: orb-aurora-2 12s ease-in-out infinite; }
+        .orb-aurora-3 { animation: orb-aurora-3 6s ease-in-out infinite; }
+
+        @keyframes orb-particle-float {
+          0%, 100% { transform: translate(0, 0); opacity: 0.4; }
+          50% { transform: translate(var(--dx), var(--dy)); opacity: 1; }
+        }
+        .orb-particle {
+          animation-name: orb-particle-float;
+          animation-timing-function: ease-in-out;
+          animation-iteration-count: infinite;
+        }
+
+        @keyframes orb-status-pulse {
+          0%, 100% { opacity: 1; transform: scale(1); }
+          50% { opacity: 0.4; transform: scale(0.85); }
+        }
+        .orb-status-dot { animation: orb-status-pulse 2s ease-in-out infinite; display: inline-block; }
+
+        @keyframes orb-label-glow-anim {
+          0%, 100% { opacity: 0.5; }
+          50% { opacity: 0.9; }
+        }
+        .orb-label-glow { animation: orb-label-glow-anim 3s ease-in-out infinite; }
+
+        @keyframes orb-pulse-anim {
+          0% { transform: scale(1); box-shadow: 0 0 60px rgba(200,244,97,0.25), inset 0 0 30px rgba(0,0,0,0.6); }
+          50% { transform: scale(1.08); box-shadow: 0 0 90px rgba(200,244,97,0.6), inset 0 0 30px rgba(0,0,0,0.4); }
+          100% { transform: scale(1); box-shadow: 0 0 60px rgba(200,244,97,0.25), inset 0 0 30px rgba(0,0,0,0.6); }
+        }
+        .orb-pulse { animation: orb-pulse-anim 0.7s ease-out; }
+
+        @keyframes orb-completing-anim {
+          0%, 100% { filter: brightness(1); }
+          25% { filter: brightness(1.4); }
+          50% { filter: brightness(2) saturate(1.3); }
+          75% { filter: brightness(1.4); }
+        }
+        .orb-completing { animation: orb-completing-anim 2s ease-in-out; }
+      `}</style>
     </div>
   );
 }
