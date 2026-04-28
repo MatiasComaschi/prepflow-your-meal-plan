@@ -227,17 +227,21 @@ export async function fetchRecipes(
       let confidence = 0;
       let updated = r;
       try {
-        const review = await reviewRecipe({
-          name: r.name,
-          ingredients: r.ingredients.map((i) => ({ name: i.name, amount: i.amount })),
-          steps: r.steps,
-          servings: r.servings,
-          current: {
-            prep_time_minutes: r.prepMinutes,
-            calories: r.calories,
-            protein_g: r.protein,
-            carbs_g: r.carbs,
-            fat_g: r.fat,
+        const review = await reviewRecipeServerFn({
+          data: {
+            recipe: {
+              name: r.name,
+              ingredients: r.ingredients.map((i) => ({ name: i.name, amount: i.amount })),
+              steps: r.steps,
+              servings: r.servings,
+              current: {
+                prep_time_minutes: r.prepMinutes,
+                calories: r.calories,
+                protein_g: r.protein,
+                carbs_g: r.carbs,
+                fat_g: r.fat,
+              },
+            },
           },
         });
         updated = applyReview(r, review);
