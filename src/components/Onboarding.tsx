@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { ChevronLeft, ChevronRight, Check, Sparkles, Loader2 } from "lucide-react";
+import { AIOrb } from "@/components/onboarding/AIOrb";
 import {
   usePreferences,
   GOAL_OPTIONS,
