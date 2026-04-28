@@ -760,5 +760,3 @@ function draftToProfile(d: Preferences) {
   };
 }
 
-// Keep `useMemo` import used to silence linter if tree-shaken later
-void useMemo;
