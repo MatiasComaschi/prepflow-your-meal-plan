@@ -42,16 +42,21 @@ export function Onboarding() {
 
   const next = async () => {
     setError(null);
+    setPulseKey((k) => k + 1);
     if (!isLast) {
       setPhaseIdx((i) => i + 1);
       return;
     }
     setAnalyzing(true);
+    setCompleting(true);
     try {
       const res = await analyzeGoalServerFn({
         data: { profile: draftToProfile(draft) },
       });
       if (res.error) setError(res.error);
+      // Hold the completion animation for ~2s minimum for the orb finale
+      const minDelay = new Promise((r) => setTimeout(r, 2000));
+      await minDelay;
       await setPrefs({ ...draft, aiPlan: res.plan ?? null, onboarded: true });
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : "AI analysis failed";
@@ -59,6 +64,7 @@ export function Onboarding() {
       await setPrefs({ ...draft, aiPlan: null, onboarded: true });
     } finally {
       setAnalyzing(false);
+      setCompleting(false);
     }
   };
 
