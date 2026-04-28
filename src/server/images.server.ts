@@ -1,4 +1,4 @@
-import { createServerFn } from "@tanstack/react-start";
+// Server-only helpers. Do NOT import from client-reachable modules.
 import { supabaseAdmin } from "@/integrations/supabase/client.server";
 
 const BUCKET = "recipe-images";
@@ -83,13 +83,3 @@ export async function getOrGenerateImage(
   return await uploadDataUrl(recipeId, generated);
 }
 
-export const generateRecipeImageServerFn = createServerFn({ method: "POST" })
-  .inputValidator((data: { recipeId: string; recipeName: string }) => {
-    if (!data?.recipeId || !data?.recipeName) throw new Error("recipeId and recipeName required");
-    if (data.recipeId.length > 200 || data.recipeName.length > 300) throw new Error("too long");
-    return data;
-  })
-  .handler(async ({ data }) => {
-    const url = await getOrGenerateImage(data.recipeId, data.recipeName);
-    return { url, error: url ? null : "failed" };
-  });
