@@ -37,7 +37,8 @@ export const generateRecipeImageServerFn = createServerFn({ method: "POST" })
 
     if (!res.ok) {
       const txt = await res.text().catch(() => "");
-      throw new Error(`Together API error ${res.status}: ${txt.slice(0, 200)}`);
+      console.error(`Together API error ${res.status}:`, txt.slice(0, 300));
+      return { url: null as string | null, error: `together_${res.status}` };
     }
 
     const json = (await res.json()) as {
@@ -45,10 +46,10 @@ export const generateRecipeImageServerFn = createServerFn({ method: "POST" })
     };
     const first = json.data?.[0];
     if (first?.b64_json) {
-      return { url: `data:image/png;base64,${first.b64_json}` };
+      return { url: `data:image/png;base64,${first.b64_json}`, error: null };
     }
     if (first?.url) {
-      return { url: first.url };
+      return { url: first.url, error: null };
     }
-    throw new Error("No image returned");
+    return { url: null, error: "no_image" };
   });
