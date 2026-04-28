@@ -55,7 +55,7 @@ export function buildRecipePrompt(name: string): string {
 export async function getOrGenerateRecipeImage(
   recipeId: string,
   recipeName: string,
-): Promise<string> {
+): Promise<string | null> {
   const cache = load();
   if (cache[recipeId]) return cache[recipeId];
 
@@ -66,6 +66,7 @@ export async function getOrGenerateRecipeImage(
     const { url } = await generateRecipeImageServerFn({
       data: { prompt: buildRecipePrompt(recipeName) },
     });
+    if (!url) throw new Error("no_image");
     cache[recipeId] = url;
     persist();
     return url;
