@@ -1,33 +1,5 @@
 import { createServerFn } from "@tanstack/react-start";
-
-export type Verification = "verified" | "ai" | "unverified";
-export type Category = "Breakfast" | "Lunch" | "Dinner" | "Snack";
-export type Difficulty = "Easy" | "Medium" | "Hard";
-
-export type Ingredient = {
-  name: string;
-  amount: string;
-  brand?: string;
-};
-
-export type Recipe = {
-  id: string;
-  name: string;
-  tagline: string;
-  image: string;
-  category: Category;
-  calories: number;
-  protein: number;
-  carbs: number;
-  fat: number;
-  fiber: number;
-  prepMinutes: number;
-  servings: number;
-  difficulty: Difficulty;
-  verification: Verification;
-  ingredients: Ingredient[];
-  steps: string[];
-};
+import type { Category, Difficulty, Ingredient, Recipe } from "@/data/recipes";
 
 const CATEGORY_TO_TYPE: Record<Category, string> = {
   Breakfast: "breakfast",
