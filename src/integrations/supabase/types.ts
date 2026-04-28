@@ -86,6 +86,114 @@ export type Database = {
         }
         Relationships: []
       }
+      profiles: {
+        Row: {
+          activity_level: string | null
+          age: number | null
+          ai_plan: Json | null
+          avoid_foods: string[]
+          avoid_other: string | null
+          biological_sex: string | null
+          budget: string
+          cooking_frequency: string | null
+          created_at: string
+          current_weight: number | null
+          favorite_proteins: string[]
+          goal: string
+          goal_text: string | null
+          goal_why: string | null
+          gym_focus: string | null
+          gym_frequency: string | null
+          height_cm: number | null
+          height_ft: number | null
+          height_in: number | null
+          height_unit: string | null
+          id: string
+          meals_per_day: number
+          notes: string | null
+          onboarded: boolean
+          restrictions: string[]
+          skill: string
+          spice_tolerance: string | null
+          target_weight: number | null
+          timeline: string | null
+          updated_at: string
+          user_id: string
+          weight_unit: string | null
+          workout_timing: string | null
+        }
+        Insert: {
+          activity_level?: string | null
+          age?: number | null
+          ai_plan?: Json | null
+          avoid_foods?: string[]
+          avoid_other?: string | null
+          biological_sex?: string | null
+          budget?: string
+          cooking_frequency?: string | null
+          created_at?: string
+          current_weight?: number | null
+          favorite_proteins?: string[]
+          goal?: string
+          goal_text?: string | null
+          goal_why?: string | null
+          gym_focus?: string | null
+          gym_frequency?: string | null
+          height_cm?: number | null
+          height_ft?: number | null
+          height_in?: number | null
+          height_unit?: string | null
+          id?: string
+          meals_per_day?: number
+          notes?: string | null
+          onboarded?: boolean
+          restrictions?: string[]
+          skill?: string
+          spice_tolerance?: string | null
+          target_weight?: number | null
+          timeline?: string | null
+          updated_at?: string
+          user_id: string
+          weight_unit?: string | null
+          workout_timing?: string | null
+        }
+        Update: {
+          activity_level?: string | null
+          age?: number | null
+          ai_plan?: Json | null
+          avoid_foods?: string[]
+          avoid_other?: string | null
+          biological_sex?: string | null
+          budget?: string
+          cooking_frequency?: string | null
+          created_at?: string
+          current_weight?: number | null
+          favorite_proteins?: string[]
+          goal?: string
+          goal_text?: string | null
+          goal_why?: string | null
+          gym_focus?: string | null
+          gym_frequency?: string | null
+          height_cm?: number | null
+          height_ft?: number | null
+          height_in?: number | null
+          height_unit?: string | null
+          id?: string
+          meals_per_day?: number
+          notes?: string | null
+          onboarded?: boolean
+          restrictions?: string[]
+          skill?: string
+          spice_tolerance?: string | null
+          target_weight?: number | null
+          timeline?: string | null
+          updated_at?: string
+          user_id?: string
+          weight_unit?: string | null
+          workout_timing?: string | null
+        }
+        Relationships: []
+      }
       user_seen_recipes: {
         Row: {
           id: string
