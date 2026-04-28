@@ -1,7 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useState } from "react";
 import { ShoppingBasket, X, Flame, Check, Copy } from "lucide-react";
-import { PlannerProvider, usePlanner, DAYS, type Day } from "@/store/planner";
+import { usePlanner, DAYS, type Day } from "@/store/planner";
 import { MacroBar } from "@/components/MacroBar";
 import { BottomNav } from "@/components/BottomNav";
 
@@ -18,11 +18,7 @@ export const Route = createFileRoute("/planner")({
 });
 
 function Page() {
-  return (
-    <PlannerProvider>
-      <Planner />
-    </PlannerProvider>
-  );
+  return <Planner />;
 }
 
 function Planner() {
