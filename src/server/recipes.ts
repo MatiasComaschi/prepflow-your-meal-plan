@@ -1,5 +1,6 @@
 import { createServerFn } from "@tanstack/react-start";
 import type { Category, Difficulty, Ingredient, Recipe } from "@/data/recipes";
+import { reviewRecipeServerFn, applyReview } from "./aiReview";
 
 const CATEGORY_TO_TYPE: Record<Category, string> = {
   Breakfast: "breakfast",
@@ -216,5 +217,38 @@ export const fetchRecipesServerFn = createServerFn({ method: "GET" })
       };
     });
 
-    return { recipes, totalResults: json.totalResults ?? recipes.length };
+    // AI quality control: review every recipe before returning.
+    // Run in parallel for throughput; on failure keep the raw recipe with "ai" badge.
+    const reviewed = await Promise.all(
+      recipes.map(async (r) => {
+        try {
+          const review = await reviewRecipeServerFn({
+            data: {
+              recipe: {
+                name: r.name,
+                ingredients: r.ingredients.map((i) => ({
+                  name: i.name,
+                  amount: i.amount,
+                })),
+                steps: r.steps,
+                servings: r.servings,
+                current: {
+                  prep_time_minutes: r.prepMinutes,
+                  calories: r.calories,
+                  protein_g: r.protein,
+                  carbs_g: r.carbs,
+                  fat_g: r.fat,
+                },
+              },
+            },
+          });
+          return applyReview(r, review);
+        } catch (e) {
+          console.error("Review failed for", r.id, e);
+          return applyReview(r, null);
+        }
+      }),
+    );
+
+    return { recipes: reviewed, totalResults: json.totalResults ?? reviewed.length };
   });
