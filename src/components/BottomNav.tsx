@@ -1,5 +1,5 @@
 import { Link } from "@tanstack/react-router";
-import { Flame, CalendarDays } from "lucide-react";
+import { Flame, CalendarDays, Settings as SettingsIcon } from "lucide-react";
 
 export function BottomNav() {
   return (
@@ -7,6 +7,7 @@ export function BottomNav() {
       <div className="mx-auto flex max-w-md items-center justify-around px-6 py-3">
         <NavItem to="/" icon={<Flame className="h-5 w-5" />} label="Discover" exact />
         <NavItem to="/planner" icon={<CalendarDays className="h-5 w-5" />} label="Planner" />
+        <NavItem to="/settings" icon={<SettingsIcon className="h-5 w-5" />} label="Settings" />
       </div>
     </nav>
   );
