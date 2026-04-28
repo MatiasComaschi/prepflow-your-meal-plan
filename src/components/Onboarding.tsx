@@ -94,6 +94,21 @@ export function Onboarding() {
                   hint={opt.hint}
                 />
               ))}
+              <div className="pt-2">
+                <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                  Tell us more (optional)
+                </label>
+                <textarea
+                  value={draft.goalText ?? ""}
+                  onChange={(e) => setDraft((d) => ({ ...d, goalText: e.target.value }))}
+                  placeholder="e.g. I'm a 30yo male, 80kg, training 4x/week, want to lean bulk while keeping energy high…"
+                  rows={3}
+                  className="w-full resize-none rounded-2xl border border-border bg-card px-4 py-3 text-sm text-foreground placeholder:text-muted-foreground/60 focus:border-primary focus:outline-none"
+                />
+                <p className="mt-1.5 text-[11px] text-muted-foreground">
+                  Our AI nutritionist will tailor your feed to this.
+                </p>
+              </div>
             </Question>
           )}
 
