@@ -10,6 +10,9 @@ import {
 } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import type { Session } from "@supabase/supabase-js";
+import type { Database } from "@/integrations/supabase/types";
+
+type ProfileUpdate = Database["public"]["Tables"]["profiles"]["Update"];
 
 // ───────────────────────── Types ─────────────────────────
 export type Goal = "lose_fat" | "build_muscle" | "recomp" | "maintain";
