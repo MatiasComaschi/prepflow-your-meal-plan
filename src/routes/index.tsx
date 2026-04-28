@@ -6,6 +6,7 @@ import { RecipeCard } from "@/components/RecipeCard";
 import { RecipeDetail } from "@/components/RecipeDetail";
 import { BottomNav } from "@/components/BottomNav";
 import { usePlanner } from "@/store/planner";
+import { usePreferences } from "@/store/preferences";
 import { Loader2 } from "lucide-react";
 
 export const Route = createFileRoute("/")({
@@ -42,6 +43,7 @@ function Page() {
   const scrollerRef = useRef<HTMLDivElement | null>(null);
 
   const { plan } = usePlanner();
+  const { prefs, ready: prefsReady } = usePreferences();
   const inWeek = useMemo(() => {
     const set = new Set<string>();
     Object.values(plan).forEach((day) =>
@@ -50,13 +52,33 @@ function Page() {
     return set;
   }, [plan]);
 
+  // Build a stable filter signature so changes trigger a refetch
+  const filters = useMemo(
+    () => ({
+      goal: prefs.goal,
+      restrictions: prefs.restrictions,
+      skill: prefs.skill,
+      budget: prefs.budget,
+    }),
+    [prefs.goal, prefs.restrictions, prefs.skill, prefs.budget],
+  );
+  const filterKey = useMemo(() => JSON.stringify(filters), [filters]);
+
+  const filtersRef = useRef(filters);
+  filtersRef.current = filters;
+
   const loadMore = useCallback(
     async (cat: Category, currentOffset: number, reset: boolean) => {
       setLoading(true);
       setError(null);
       try {
         const res = await fetchRecipesServerFn({
-          data: { category: cat, offset: currentOffset, number: PAGE_SIZE },
+          data: {
+            category: cat,
+            offset: currentOffset,
+            number: PAGE_SIZE,
+            filters: filtersRef.current,
+          },
         });
         if (res.recipes.length === 0) {
           setDone(true);
@@ -76,8 +98,10 @@ function Page() {
     [],
   );
 
-  // Fresh feed each time category changes (or on mount): random base offset
+  // Fresh feed when category OR preferences change. Wait for prefs to hydrate.
   useEffect(() => {
+    if (!prefsReady) return;
+    if (!prefs.onboarded) return; // wait until onboarding completes
     const base = Math.floor(Math.random() * 200);
     baseOffsetRef.current = base;
     setRecipes([]);
@@ -85,7 +109,8 @@ function Page() {
     setDone(false);
     scrollerRef.current?.scrollTo({ top: 0 });
     loadMore(category, base, true);
-  }, [category, loadMore]);
+  }, [category, filterKey, prefsReady, prefs.onboarded, loadMore]);
+
 
   // Infinite scroll via IntersectionObserver inside the scroll container
   useEffect(() => {

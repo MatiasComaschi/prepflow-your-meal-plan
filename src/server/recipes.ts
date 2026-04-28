@@ -8,6 +8,14 @@ const CATEGORY_TO_TYPE: Record<Category, string> = {
   Snack: "snack",
 };
 
+export type RecipeFilters = {
+  // From preferences
+  goal?: "lose_fat" | "build_muscle" | "recomp" | "maintain";
+  restrictions?: string[]; // e.g. ["no_dairy", "vegan"]
+  skill?: "beginner" | "intermediate" | "advanced";
+  budget?: "under_50" | "50_100" | "100_150" | "no_limit";
+};
+
 function pickNum(nutrients: any[], name: string): number {
   const n = nutrients?.find((x) => x.name?.toLowerCase() === name.toLowerCase());
   return n ? Math.round(Number(n.amount) || 0) : 0;
@@ -23,8 +31,66 @@ function stripHtml(s: string): string {
   return (s || "").replace(/<[^>]+>/g, "").trim();
 }
 
+function buildPrefParams(
+  filters: RecipeFilters | undefined,
+  category: Category,
+): Record<string, string> {
+  const out: Record<string, string> = {};
+  if (!filters) return out;
+
+  // Goal -> macro/calorie targets (per recipe)
+  // Snack ranges are halved
+  const isSnack = category === "Snack";
+  const halve = (n: number) => Math.round(n / 2);
+  if (filters.goal === "lose_fat") {
+    out.minProtein = String(isSnack ? 10 : 25);
+    out.maxCalories = String(isSnack ? 250 : 500);
+  } else if (filters.goal === "build_muscle") {
+    out.minProtein = String(isSnack ? 15 : 35);
+    out.minCalories = String(isSnack ? 250 : 600);
+  } else if (filters.goal === "recomp") {
+    out.minProtein = String(isSnack ? 12 : 30);
+    out.maxCalories = String(isSnack ? 300 : 650);
+  } else if (filters.goal === "maintain") {
+    out.minProtein = String(isSnack ? 8 : 20);
+  }
+
+  // Dietary restrictions
+  const r = new Set(filters.restrictions ?? []);
+  const intolerances: string[] = [];
+  let diet: string | undefined;
+  if (r.has("no_dairy")) intolerances.push("dairy");
+  if (r.has("no_gluten")) intolerances.push("gluten");
+  if (r.has("no_shellfish")) intolerances.push("shellfish");
+  if (r.has("vegan")) diet = "vegan";
+  else if (r.has("vegetarian")) diet = "vegetarian";
+  if (intolerances.length) out.intolerances = intolerances.join(",");
+  if (diet) out.diet = diet;
+  const excludes: string[] = [];
+  if (r.has("no_pork")) excludes.push("pork", "bacon", "ham", "prosciutto");
+  if (excludes.length) out.excludeIngredients = excludes.join(",");
+
+  // Skill level -> max ready time
+  if (filters.skill === "beginner") out.maxReadyTime = "20";
+  else if (filters.skill === "intermediate") out.maxReadyTime = "45";
+
+  // Budget -> max ingredient count (proxy for complexity / cost)
+  if (filters.budget === "under_50") out.maxIngredients = "6";
+  else if (filters.budget === "50_100") out.maxIngredients = "10";
+  else if (filters.budget === "100_150") out.maxIngredients = "14";
+
+  return out;
+}
+
 export const fetchRecipesServerFn = createServerFn({ method: "GET" })
-  .inputValidator((d: { category: Category; offset: number; number?: number }) => d)
+  .inputValidator(
+    (d: {
+      category: Category;
+      offset: number;
+      number?: number;
+      filters?: RecipeFilters;
+    }) => d,
+  )
   .handler(async ({ data }): Promise<{ recipes: Recipe[]; totalResults: number }> => {
     const apiKey = process.env.SPOONACULAR_API_KEY;
     if (!apiKey) {
@@ -32,6 +98,8 @@ export const fetchRecipesServerFn = createServerFn({ method: "GET" })
     }
 
     const number = Math.min(data.number ?? 10, 20);
+    const prefParams = buildPrefParams(data.filters, data.category);
+
     const params = new URLSearchParams({
       apiKey,
       type: CATEGORY_TO_TYPE[data.category],
@@ -41,6 +109,7 @@ export const fetchRecipesServerFn = createServerFn({ method: "GET" })
       addRecipeInformation: "true",
       instructionsRequired: "true",
       sort: "random",
+      ...prefParams,
     });
 
     const url = `https://api.spoonacular.com/recipes/complexSearch?${params.toString()}`;
