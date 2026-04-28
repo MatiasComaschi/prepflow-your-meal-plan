@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { supabaseAdmin } from "@/integrations/supabase/client.server";
-import { getOrGenerateImage } from "@/server/images";
+import { getOrGenerateImage } from "@/server/images.server";
 
 /**
  * Background maintenance hook (called by pg_cron weekly):

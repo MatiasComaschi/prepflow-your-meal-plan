@@ -1,7 +1,14 @@
-import { createServerFn } from "@tanstack/react-start";
+// Server-only helpers. Do NOT import from client-reachable modules.
 import { supabaseAdmin } from "@/integrations/supabase/client.server";
 import type { Category, Recipe } from "@/data/recipes";
-import type { RecipeFilters } from "./recipes";
+import type { RecipeFilters } from "./recipes.types";
+
+export type QueryCacheInput = {
+  category: Category;
+  filters?: RecipeFilters;
+  limit: number;
+  excludeIds?: string[];
+};
 
 // ───────────────────────── Tag derivation ─────────────────────────
 export function deriveTags(r: {
@@ -116,51 +123,42 @@ export async function saveCachedRecipe(
 }
 
 // ───────────────────────── Query cache ─────────────────────────
-export const queryCacheServerFn = createServerFn({ method: "POST" })
-  .inputValidator(
-    (d: {
-      category: Category;
-      filters?: RecipeFilters;
-      limit: number;
-      excludeIds?: string[];
-    }) => d,
-  )
-  .handler(async ({ data }): Promise<{ recipes: Recipe[] }> => {
-    const wantedTags = tagsFromFilters(data.filters);
-    let q = supabaseAdmin
-      .from("cached_recipes")
-      .select("*")
-      .eq("category", data.category);
+export async function queryCache(
+  data: QueryCacheInput,
+): Promise<{ recipes: Recipe[] }> {
+  const wantedTags = tagsFromFilters(data.filters);
+  let q = supabaseAdmin
+    .from("cached_recipes")
+    .select("*")
+    .eq("category", data.category);
 
-    if (wantedTags.length) {
-      // overlaps: any of the requested tags
-      q = q.overlaps("tags", wantedTags);
-    }
-    if (data.excludeIds?.length) {
-      q = q.not("id", "in", `(${data.excludeIds.map((s) => `"${s}"`).join(",")})`);
-    }
+  if (wantedTags.length) {
+    q = q.overlaps("tags", wantedTags);
+  }
+  if (data.excludeIds?.length) {
+    q = q.not("id", "in", `(${data.excludeIds.map((s) => `"${s}"`).join(",")})`);
+  }
 
-    // AI plan calorie bounds (per meal)
-    const plan = data.filters?.aiPlan;
-    if (plan) {
-      const meals = Math.max(2, Math.min(6, data.filters?.mealsPerDay ?? 3));
-      const isSnack = data.category === "Snack";
-      const scale = isSnack ? 0.5 : 1;
-      const minC = Math.max(50, Math.round((plan.daily_calories / meals) * scale * 0.6));
-      const maxC = Math.round((plan.daily_calories / meals) * scale * 1.4);
-      q = q.gte("calories", minC).lte("calories", maxC);
-    }
+  const plan = data.filters?.aiPlan;
+  if (plan) {
+    const meals = Math.max(2, Math.min(6, data.filters?.mealsPerDay ?? 3));
+    const isSnack = data.category === "Snack";
+    const scale = isSnack ? 0.5 : 1;
+    const minC = Math.max(50, Math.round((plan.daily_calories / meals) * scale * 0.6));
+    const maxC = Math.round((plan.daily_calories / meals) * scale * 1.4);
+    q = q.gte("calories", minC).lte("calories", maxC);
+  }
 
-    const { data: rows, error } = await q
-      .order("hits", { ascending: false })
-      .limit(Math.min(50, Math.max(1, data.limit)));
+  const { data: rows, error } = await q
+    .order("hits", { ascending: false })
+    .limit(Math.min(50, Math.max(1, data.limit)));
 
-    if (error) {
-      console.error("queryCache error", error.message);
-      return { recipes: [] };
-    }
-    return { recipes: (rows ?? []).map(rowToRecipe) };
-  });
+  if (error) {
+    console.error("queryCache error", error.message);
+    return { recipes: [] };
+  }
+  return { recipes: (rows ?? []).map(rowToRecipe) };
+}
 
 // ───────────────────────── Increment hits ─────────────────────────
 export async function incrementHits(ids: string[]): Promise<void> {

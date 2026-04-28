@@ -1,4 +1,4 @@
-import { generateRecipeImageServerFn } from "@/server/images";
+import { generateRecipeImageServerFn } from "@/server/images.functions";
 
 const STORAGE_KEY = "prepflow:img-cache:v2";
 const MAX_ENTRIES = 200;
