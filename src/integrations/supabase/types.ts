@@ -14,7 +14,78 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      cached_recipes: {
+        Row: {
+          calories: number
+          carbs: number
+          category: string
+          confidence: number
+          created_at: string
+          difficulty: string
+          fat: number
+          fiber: number
+          hits: number
+          id: string
+          image_url: string | null
+          ingredients: Json
+          name: string
+          prep_minutes: number
+          protein: number
+          servings: number
+          source: string
+          steps: Json
+          tagline: string
+          tags: string[]
+          updated_at: string
+        }
+        Insert: {
+          calories?: number
+          carbs?: number
+          category: string
+          confidence?: number
+          created_at?: string
+          difficulty?: string
+          fat?: number
+          fiber?: number
+          hits?: number
+          id: string
+          image_url?: string | null
+          ingredients?: Json
+          name: string
+          prep_minutes?: number
+          protein?: number
+          servings?: number
+          source?: string
+          steps?: Json
+          tagline?: string
+          tags?: string[]
+          updated_at?: string
+        }
+        Update: {
+          calories?: number
+          carbs?: number
+          category?: string
+          confidence?: number
+          created_at?: string
+          difficulty?: string
+          fat?: number
+          fiber?: number
+          hits?: number
+          id?: string
+          image_url?: string | null
+          ingredients?: Json
+          name?: string
+          prep_minutes?: number
+          protein?: number
+          servings?: number
+          source?: string
+          steps?: Json
+          tagline?: string
+          tags?: string[]
+          updated_at?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
