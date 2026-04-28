@@ -14,6 +14,7 @@ import { ProgressRecapCard } from "@/components/feed-cards/ProgressRecapCard";
 import { buildFeed } from "@/data/feed";
 import { usePlanner } from "@/store/planner";
 import { usePreferences } from "@/store/preferences";
+import { supabase } from "@/integrations/supabase/client";
 import { Loader2 } from "lucide-react";
 
 export const Route = createFileRoute("/")({
