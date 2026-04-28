@@ -1,5 +1,7 @@
 import { Outlet, Link, createRootRoute, HeadContent, Scripts } from "@tanstack/react-router";
 import { PlannerProvider } from "@/store/planner";
+import { PreferencesProvider } from "@/store/preferences";
+import { Onboarding } from "@/components/Onboarding";
 
 import appCss from "../styles.css?url";
 
