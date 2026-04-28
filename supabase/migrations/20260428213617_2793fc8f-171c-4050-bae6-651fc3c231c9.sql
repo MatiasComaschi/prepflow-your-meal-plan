@@ -1,0 +1,1 @@
+UPDATE public.profiles SET onboarded = false WHERE user_id = '21d2764e-3318-43b8-99c9-dd2baf891eec';
