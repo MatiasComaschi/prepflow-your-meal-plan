@@ -1,7 +1,8 @@
 import { Outlet, Link, createRootRoute, HeadContent, Scripts } from "@tanstack/react-router";
 import { PlannerProvider } from "@/store/planner";
-import { PreferencesProvider } from "@/store/preferences";
+import { PreferencesProvider, usePreferences } from "@/store/preferences";
 import { Onboarding } from "../components/Onboarding";
+import { AuthScreen } from "../components/AuthScreen";
 
 import appCss from "../styles.css?url";
 
@@ -76,8 +77,15 @@ function RootComponent() {
     <PreferencesProvider>
       <PlannerProvider>
         <Outlet />
-        <Onboarding />
+        <AuthGate />
       </PlannerProvider>
     </PreferencesProvider>
   );
+}
+
+function AuthGate() {
+  const { signedIn, ready } = usePreferences();
+  if (!ready) return null;
+  if (!signedIn) return <AuthScreen />;
+  return <Onboarding />;
 }
