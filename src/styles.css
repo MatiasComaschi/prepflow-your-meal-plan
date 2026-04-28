@@ -117,6 +117,7 @@
   .snap-item {
     scroll-snap-align: start;
     scroll-snap-stop: always;
+    height: 100dvh;
   }
   .no-scrollbar::-webkit-scrollbar { display: none; }
   .no-scrollbar { scrollbar-width: none; }
@@ -124,4 +125,9 @@
     box-shadow: var(--shadow-glow);
   }
   .text-balance { text-wrap: balance; }
+}
+
+@keyframes slide-up {
+  from { transform: translateY(100%); opacity: 0.6; }
+  to   { transform: translateY(0);    opacity: 1; }
 }
