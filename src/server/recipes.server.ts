@@ -115,6 +115,7 @@ export type FetchInput = {
   offset: number;
   number?: number;
   filters?: RecipeFilters;
+  userId?: string | null;
 };
 
 export async function fetchRecipes(
