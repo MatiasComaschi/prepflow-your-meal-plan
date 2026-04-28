@@ -6,6 +6,7 @@ import { RecipeCard } from "@/components/RecipeCard";
 import { RecipeDetail } from "@/components/RecipeDetail";
 import { BottomNav } from "@/components/BottomNav";
 import { usePlanner } from "@/store/planner";
+import { usePreferences } from "@/store/preferences";
 import { Loader2 } from "lucide-react";
 
 export const Route = createFileRoute("/")({
