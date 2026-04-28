@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { ChevronLeft, ChevronRight, Check, Sparkles } from "lucide-react";
+import { ChevronLeft, ChevronRight, Check, Sparkles, Loader2 } from "lucide-react";
 import {
   usePreferences,
   GOAL_OPTIONS,
@@ -10,6 +10,7 @@ import {
   type Preferences,
   type Restriction,
 } from "@/store/preferences";
+import { analyzeGoalServerFn } from "@/server/aiPlan";
 
 const STEPS = ["goal", "meals", "restrictions", "skill", "budget"] as const;
 type Step = (typeof STEPS)[number];
@@ -18,6 +19,7 @@ export function Onboarding() {
   const { prefs, setPrefs, ready } = usePreferences();
   const [draft, setDraft] = useState<Preferences>(prefs);
   const [stepIdx, setStepIdx] = useState(0);
+  const [analyzing, setAnalyzing] = useState(false);
 
   if (!ready) return null;
   if (prefs.onboarded) return null;
@@ -25,9 +27,21 @@ export function Onboarding() {
   const step: Step = STEPS[stepIdx];
   const isLast = stepIdx === STEPS.length - 1;
 
-  const next = () => {
+  const next = async () => {
     if (isLast) {
-      setPrefs({ ...draft, onboarded: true });
+      setAnalyzing(true);
+      let aiPlan = null;
+      try {
+        const res = await analyzeGoalServerFn({
+          data: { goalText: draft.goalText?.trim() || `${draft.goal}` },
+        });
+        aiPlan = res.plan;
+      } catch (e) {
+        console.error("AI analyze failed", e);
+      } finally {
+        setAnalyzing(false);
+      }
+      setPrefs({ ...draft, aiPlan, onboarded: true });
     } else {
       setStepIdx((i) => i + 1);
     }
@@ -80,6 +94,21 @@ export function Onboarding() {
                   hint={opt.hint}
                 />
               ))}
+              <div className="pt-2">
+                <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                  Tell us more (optional)
+                </label>
+                <textarea
+                  value={draft.goalText ?? ""}
+                  onChange={(e) => setDraft((d) => ({ ...d, goalText: e.target.value }))}
+                  placeholder="e.g. I'm a 30yo male, 80kg, training 4x/week, want to lean bulk while keeping energy high…"
+                  rows={3}
+                  className="w-full resize-none rounded-2xl border border-border bg-card px-4 py-3 text-sm text-foreground placeholder:text-muted-foreground/60 focus:border-primary focus:outline-none"
+                />
+                <p className="mt-1.5 text-[11px] text-muted-foreground">
+                  Our AI nutritionist will tailor your feed to this.
+                </p>
+              </div>
             </Question>
           )}
 
@@ -169,9 +198,15 @@ export function Onboarding() {
           <button
             type="button"
             onClick={next}
-            className="flex h-12 flex-1 items-center justify-center gap-2 rounded-2xl bg-primary px-4 text-sm font-bold text-primary-foreground shadow-lg shadow-primary/20"
+            disabled={analyzing}
+            className="flex h-12 flex-1 items-center justify-center gap-2 rounded-2xl bg-primary px-4 text-sm font-bold text-primary-foreground shadow-lg shadow-primary/20 disabled:opacity-70"
           >
-            {isLast ? (
+            {analyzing ? (
+              <>
+                <Loader2 className="h-4 w-4 animate-spin" />
+                Analyzing your goal…
+              </>
+            ) : isLast ? (
               <>
                 <Check className="h-4 w-4" />
                 Start cooking
