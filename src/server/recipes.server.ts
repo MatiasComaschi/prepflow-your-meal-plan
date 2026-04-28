@@ -6,10 +6,14 @@ import {
   queryCache,
   saveCachedRecipe,
   incrementHits,
+  countMatchingCached,
+  markRecipesSeen,
 } from "./recipeCache.server";
 import { getOrGenerateImage } from "./images.server";
 
 const CACHE_THRESHOLD = 20;
+const MATCH_LOW = 50;
+const MATCH_HIGH = 150;
 
 const CATEGORY_TO_TYPE: Record<Category, string> = {
   Breakfast: "breakfast",
