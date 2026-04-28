@@ -1,6 +1,14 @@
 import { createServerFn } from "@tanstack/react-start";
 import type { Category, Difficulty, Ingredient, Recipe } from "@/data/recipes";
 import { reviewRecipeServerFn, applyReview } from "./aiReview";
+import {
+  queryCacheServerFn,
+  saveCachedRecipe,
+  incrementHits,
+} from "./recipeCache";
+import { getOrGenerateImage } from "./images";
+
+const CACHE_THRESHOLD = 20;
 
 const CATEGORY_TO_TYPE: Record<Category, string> = {
   Breakfast: "breakfast",
@@ -132,14 +140,39 @@ export const fetchRecipesServerFn = createServerFn({ method: "GET" })
     }) => d,
   )
   .handler(async ({ data }): Promise<{ recipes: Recipe[]; totalResults: number }> => {
-    const apiKey = process.env.SPOONACULAR_API_KEY;
-    if (!apiKey) {
-      return { recipes: [], totalResults: 0 };
+    const number = Math.min(data.number ?? 10, 20);
+
+    // ── 1. Cache-first: query Supabase for matching recipes ──
+    let cached: Recipe[] = [];
+    try {
+      const cacheRes = await queryCacheServerFn({
+        data: {
+          category: data.category,
+          filters: data.filters,
+          limit: Math.max(number, CACHE_THRESHOLD),
+        },
+      });
+      cached = cacheRes.recipes;
+    } catch (e) {
+      console.error("cache query failed", e);
     }
 
-    const number = Math.min(data.number ?? 10, 20);
-    const prefParams = buildPrefParams(data.filters, data.category);
+    // If cache has enough matches, serve entirely from cache — no API/AI calls.
+    if (cached.length >= CACHE_THRESHOLD) {
+      const slice = cached.slice(0, number);
+      // Best-effort hit counting for popularity tracking
+      incrementHits(slice.map((r) => r.id)).catch(() => {});
+      return { recipes: slice, totalResults: cached.length };
+    }
 
+    // ── 2. Fall back to Spoonacular for the gap ──
+    const apiKey = process.env.SPOONACULAR_API_KEY;
+    if (!apiKey) {
+      // No key but maybe some cache — return what we have
+      return { recipes: cached.slice(0, number), totalResults: cached.length };
+    }
+
+    const prefParams = buildPrefParams(data.filters, data.category);
     const params = new URLSearchParams({
       apiKey,
       type: CATEGORY_TO_TYPE[data.category],
@@ -157,70 +190,74 @@ export const fetchRecipesServerFn = createServerFn({ method: "GET" })
     if (!res.ok) {
       const text = await res.text();
       console.error("Spoonacular error", res.status, text);
-      return { recipes: [], totalResults: 0 };
+      return { recipes: cached.slice(0, number), totalResults: cached.length };
     }
     const json: any = await res.json();
     const results: any[] = json.results ?? [];
 
-    const recipes: Recipe[] = results.map((r) => {
-      const nutrients = r.nutrition?.nutrients ?? [];
-      const ings = r.nutrition?.ingredients ?? r.extendedIngredients ?? [];
-      const ingredients: Ingredient[] = ings.map((i: any) => ({
-        name: i.name ?? i.original ?? "ingredient",
-        amount:
-          i.amount && i.unit
-            ? `${Math.round((Number(i.amount) || 0) * 100) / 100} ${i.unit}`.trim()
-            : i.original ?? "",
-      }));
+    const cachedIds = new Set(cached.map((r) => r.id));
+    const fresh: Recipe[] = results
+      .map((r) => {
+        const nutrients = r.nutrition?.nutrients ?? [];
+        const ings = r.nutrition?.ingredients ?? r.extendedIngredients ?? [];
+        const ingredients: Ingredient[] = ings.map((i: any) => ({
+          name: i.name ?? i.original ?? "ingredient",
+          amount:
+            i.amount && i.unit
+              ? `${Math.round((Number(i.amount) || 0) * 100) / 100} ${i.unit}`.trim()
+              : i.original ?? "",
+        }));
 
-      const steps: string[] = [];
-      const blocks = r.analyzedInstructions ?? [];
-      for (const b of blocks) {
-        for (const s of b.steps ?? []) {
-          if (s.step) steps.push(stripHtml(s.step));
+        const steps: string[] = [];
+        const blocks = r.analyzedInstructions ?? [];
+        for (const b of blocks) {
+          for (const s of b.steps ?? []) {
+            if (s.step) steps.push(stripHtml(s.step));
+          }
         }
-      }
-      if (steps.length === 0 && r.instructions) {
-        stripHtml(r.instructions)
-          .split(/\.\s+|\n+/)
-          .map((s: string) => s.trim())
-          .filter(Boolean)
-          .forEach((s: string) => steps.push(s));
-      }
+        if (steps.length === 0 && r.instructions) {
+          stripHtml(r.instructions)
+            .split(/\.\s+|\n+/)
+            .map((s: string) => s.trim())
+            .filter(Boolean)
+            .forEach((s: string) => steps.push(s));
+        }
 
-      const prep = Math.max(5, Math.round(r.readyInMinutes ?? 25));
-      const calories = pickNum(nutrients, "Calories");
-      const protein = pickNum(nutrients, "Protein");
-      const carbs = pickNum(nutrients, "Carbohydrates");
-      const fat = pickNum(nutrients, "Fat");
-      const fiber = pickNum(nutrients, "Fiber");
+        const prep = Math.max(5, Math.round(r.readyInMinutes ?? 25));
+        const calories = pickNum(nutrients, "Calories");
+        const protein = pickNum(nutrients, "Protein");
+        const carbs = pickNum(nutrients, "Carbohydrates");
+        const fat = pickNum(nutrients, "Fat");
+        const fiber = pickNum(nutrients, "Fiber");
 
-      return {
-        id: `sp-${r.id}`,
-        name: r.title ?? "Untitled",
-        tagline: r.dishTypes?.[0]
-          ? r.dishTypes[0].charAt(0).toUpperCase() + r.dishTypes[0].slice(1)
-          : "Fresh from the kitchen",
-        image: r.image ?? "",
-        category: data.category,
-        calories,
-        protein,
-        carbs,
-        fat,
-        fiber,
-        prepMinutes: prep,
-        servings: r.servings ?? 1,
-        difficulty: difficultyFromTime(prep),
-        verification: r.veryHealthy ? "verified" : "ai",
-        ingredients,
-        steps: steps.length ? steps : ["Combine ingredients and serve."],
-      };
-    });
+        return {
+          id: `sp-${r.id}`,
+          name: r.title ?? "Untitled",
+          tagline: r.dishTypes?.[0]
+            ? r.dishTypes[0].charAt(0).toUpperCase() + r.dishTypes[0].slice(1)
+            : "Fresh from the kitchen",
+          image: r.image ?? "",
+          category: data.category,
+          calories,
+          protein,
+          carbs,
+          fat,
+          fiber,
+          prepMinutes: prep,
+          servings: r.servings ?? 1,
+          difficulty: difficultyFromTime(prep),
+          verification: r.veryHealthy ? "verified" : "ai",
+          ingredients,
+          steps: steps.length ? steps : ["Combine ingredients and serve."],
+        } as Recipe;
+      })
+      .filter((r) => !cachedIds.has(r.id));
 
-    // AI quality control: review every recipe before returning.
-    // Run in parallel for throughput; on failure keep the raw recipe with "ai" badge.
+    // ── 3. AI quality-control review for new (uncached) recipes only ──
     const reviewed = await Promise.all(
-      recipes.map(async (r) => {
+      fresh.map(async (r) => {
+        let confidence = 0;
+        let updated = r;
         try {
           const review = await reviewRecipeServerFn({
             data: {
@@ -242,13 +279,35 @@ export const fetchRecipesServerFn = createServerFn({ method: "GET" })
               },
             },
           });
-          return applyReview(r, review);
+          updated = applyReview(r, review);
+          confidence = review?.confidence ?? 0;
         } catch (e) {
           console.error("Review failed for", r.id, e);
-          return applyReview(r, null);
+          updated = applyReview(r, null);
         }
+
+        // Generate (or fetch existing) the recipe image and persist to cache
+        let imageUrl: string | null = null;
+        try {
+          imageUrl = await getOrGenerateImage(updated.id, updated.name);
+        } catch (e) {
+          console.error("Image gen failed for", updated.id, e);
+        }
+        if (imageUrl) updated = { ...updated, image: imageUrl };
+
+        // Persist to Supabase cache (fire-and-forget)
+        saveCachedRecipe(updated, confidence, imageUrl).catch(() => {});
+
+        return updated;
       }),
     );
 
-    return { recipes: reviewed, totalResults: json.totalResults ?? reviewed.length };
+    // Combine cached + fresh, capped at requested number
+    const combined = [...cached, ...reviewed].slice(0, number);
+    incrementHits(cached.slice(0, number).map((r) => r.id)).catch(() => {});
+
+    return {
+      recipes: combined,
+      totalResults: json.totalResults ?? combined.length,
+    };
   });
