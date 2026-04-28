@@ -31,6 +31,8 @@ export function Onboarding() {
   const [phaseIdx, setPhaseIdx] = useState(0);
   const [analyzing, setAnalyzing] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [pulseKey, setPulseKey] = useState(0);
+  const [completing, setCompleting] = useState(false);
 
   if (!ready) return null;
   if (prefs.onboarded) return null;
