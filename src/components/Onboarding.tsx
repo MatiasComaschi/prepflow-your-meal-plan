@@ -95,6 +95,16 @@ export function Onboarding() {
           </div>
         </div>
 
+        {/* Persistent AI orb */}
+        <div className="mt-4 flex justify-center">
+          <AIOrb
+            phase={phaseIdx as 0 | 1 | 2 | 3 | 4}
+            pulseKey={pulseKey}
+            completing={completing}
+            captionOverride={completing ? "your AI is ready" : undefined}
+          />
+        </div>
+
         <div className="mt-3 flex-1 overflow-y-auto no-scrollbar">
           {phaseIdx === 0 && <PhaseAbout draft={draft} setDraft={setDraft} />}
           {phaseIdx === 1 && <PhaseGoal draft={draft} setDraft={setDraft} />}
