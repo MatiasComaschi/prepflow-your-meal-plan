@@ -38,8 +38,6 @@ function stripHtml(s: string): string {
 }
 
 function localFallbackRecipes(data: FetchInput, number: number): Recipe[] {
-  if (data.offset > 0) return [];
-
   const avoid = new Set(
     (data.filters?.aiPlan?.avoid ?? []).map((item) => item.toLowerCase().trim()).filter(Boolean),
   );
@@ -124,9 +122,6 @@ function buildPrefParams(
     out.minFat = String(Math.max(0, Math.round(perMealFat * scale * 0.4)));
     out.maxFat = String(Math.round(perMealFat * scale * 1.6));
 
-    if (filters.aiPlan.meal_keywords?.length) {
-      out.query = filters.aiPlan.meal_keywords.slice(0, 4).join(" ");
-    }
     if (filters.aiPlan.avoid?.length) {
       const avoid = filters.aiPlan.avoid.slice(0, 10).join(",");
       out.excludeIngredients = out.excludeIngredients
