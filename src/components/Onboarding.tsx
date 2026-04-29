@@ -67,16 +67,6 @@ export function Onboarding() {
   return (
     <div className="fixed inset-0 z-[100] flex items-stretch justify-center bg-background/95 backdrop-blur-xl">
       <div className="mx-auto flex h-[100dvh] w-full max-w-md flex-col px-6 pb-[max(1.5rem,env(safe-area-inset-bottom))] pt-[max(1.5rem,env(safe-area-inset-top))]">
-        {/* Progress */}
-        <div className="flex items-center gap-1.5">
-          {PHASES.map((_, i) => (
-            <div
-              key={i}
-              className={`h-1 flex-1 rounded-full transition-colors ${
-                i <= phaseIdx ? "bg-primary" : "bg-muted"
-              }`}
-            />
-          ))}
         {/* Progress dots */}
         <div className="flex items-center justify-center gap-2">
           {PHASES.map((_, i) => (
