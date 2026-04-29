@@ -172,31 +172,26 @@ export async function saveCachedRecipe(
 }
 
 // ───────────────────────── Query cache ─────────────────────────
-export async function queryCache(
+// Strict category filter is non-negotiable — the .eq("category", data.category)
+// clause guarantees no cross-category contamination at the SQL layer.
+async function runCacheQuery(
   data: QueryCacheInput,
-): Promise<{ recipes: Recipe[] }> {
+  excludeIds: Set<string>,
+): Promise<Recipe[]> {
   const wantedTags = tagsFromFilters(data.filters);
-
-  // Pull seen IDs for this user (if any) and merge with explicit excludeIds.
-  const exclude = new Set<string>(data.excludeIds ?? []);
-  if (data.userId) {
-    const seen = await getSeenRecipeIds(data.userId);
-    seen.forEach((id) => exclude.add(id));
-  }
-
   let q = supabaseAdmin
     .from("cached_recipes")
     .select("*")
-    .eq("category", data.category);
+    .eq("category", data.category); // STRICT: no leakage between meal types
 
   if (wantedTags.length) {
     q = q.overlaps("tags", wantedTags);
   }
-  if (exclude.size) {
+  if (excludeIds.size) {
     q = q.not(
       "id",
       "in",
-      `(${Array.from(exclude).map((s) => `"${s}"`).join(",")})`,
+      `(${Array.from(excludeIds).map((s) => `"${s}"`).join(",")})`,
     );
   }
 
@@ -215,10 +210,60 @@ export async function queryCache(
     .limit(Math.min(50, Math.max(1, data.limit)));
 
   if (error) {
-    console.error("queryCache error", error.message);
-    return { recipes: [] };
+    console.error("[queryCache] SQL error:", error.message);
+    return [];
   }
-  return { recipes: (rows ?? []).map(rowToRecipe) };
+  return (rows ?? []).map(rowToRecipe);
+}
+
+export async function queryCache(
+  data: QueryCacheInput,
+): Promise<{ recipes: Recipe[]; usedSeenFallback: boolean }> {
+  const exclude = new Set<string>(data.excludeIds ?? []);
+  let seenIds = new Set<string>();
+  if (data.userId) {
+    try {
+      seenIds = await getSeenRecipeIds(data.userId);
+      seenIds.forEach((id) => exclude.add(id));
+    } catch (e) {
+      console.error("[queryCache] getSeenRecipeIds failed:", e);
+    }
+  }
+
+  // Pass 1: unseen only
+  const unseen = await runCacheQuery(data, exclude);
+  console.log(
+    `[queryCache] category=${data.category} unseen=${unseen.length} seenExcluded=${seenIds.size}`,
+    unseen.slice(0, 3).map((r) => ({ id: r.id, name: r.name, category: r.category })),
+  );
+
+  // Sanity guard against stray category leaks at the row level.
+  const strict = unseen.filter((r) => r.category === data.category);
+  if (strict.length !== unseen.length) {
+    console.warn(
+      `[queryCache] dropped ${unseen.length - strict.length} cross-category rows for ${data.category}`,
+    );
+  }
+
+  // BUG 2 fallback: if unseen pool is too small, ignore the seen exclusion
+  // and serve seen recipes again, marked with `seen: true`.
+  const FALLBACK_THRESHOLD = 10;
+  if (strict.length >= FALLBACK_THRESHOLD || seenIds.size === 0) {
+    return { recipes: strict, usedSeenFallback: false };
+  }
+
+  console.log(
+    `[queryCache] unseen below ${FALLBACK_THRESHOLD}, falling back to seen recipes for category=${data.category}`,
+  );
+  const withSeen = await runCacheQuery(
+    data,
+    new Set<string>(data.excludeIds ?? []), // drop seen exclusion
+  );
+  const strictAll = withSeen.filter((r) => r.category === data.category);
+  const flagged = strictAll.map((r) => ({ ...r, seen: seenIds.has(r.id) }));
+  // Show unseen first, then seen.
+  flagged.sort((a, b) => Number(!!a.seen) - Number(!!b.seen));
+  return { recipes: flagged, usedSeenFallback: true };
 }
 
 // ───────────────────────── Increment hits ─────────────────────────
