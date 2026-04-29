@@ -369,6 +369,11 @@ export function AIOrb({ phase, pulseKey, completing = false, captionOverride }: 
         .orb-aurora-1 { animation: orb-aurora-1 8s ease-in-out infinite; }
         .orb-aurora-2 { animation: orb-aurora-2 12s ease-in-out infinite; }
         .orb-aurora-3 { animation: orb-aurora-3 6s ease-in-out infinite; }
+        @keyframes orb-aurora-4 {
+          0%, 100% { transform: translate(0, 0) scale(1); opacity: 0.7; }
+          50% { transform: translate(3%, 4%) scale(1.12); opacity: 0.95; }
+        }
+        .orb-aurora-4 { animation: orb-aurora-4 10s ease-in-out infinite; }
 
         @keyframes orb-particle-float {
           0%, 100% { transform: translate(0, 0); opacity: 0.4; }
