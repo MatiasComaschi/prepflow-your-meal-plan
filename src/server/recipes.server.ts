@@ -147,21 +147,38 @@ export async function fetchRecipes(
   const number = Math.min(data.number ?? 10, 20);
   const userId = data.userId ?? null;
 
+  console.log(
+    `[fetchRecipes] start category=${data.category} offset=${data.offset} number=${number} userId=${userId ?? "anon"}`,
+  );
+
   // 1) Determine sliding-scale ratio from total matches in cache (ignores seen).
   let totalMatches = 0;
   try {
     totalMatches = await countMatchingCached(data.category, data.filters);
   } catch (e) {
-    console.error("countMatchingCached failed", e);
+    console.error("[fetchRecipes] countMatchingCached failed", e);
   }
+  console.log(`[fetchRecipes] cache totalMatches=${totalMatches} for ${data.category}`);
 
   let cacheRatio: number;
   if (totalMatches < MATCH_LOW) cacheRatio = 0;
   else if (totalMatches < MATCH_HIGH) cacheRatio = 0.4;
   else cacheRatio = 1;
 
-  // 2) Query cache (excluding seen for this user).
+  // BUG 2.2: if the cache is genuinely sparse (< 5 entries), force a fresh
+  // Spoonacular fetch regardless of the sliding-scale threshold.
+  const FORCE_FRESH_BELOW = 5;
+  const forceFresh = totalMatches < FORCE_FRESH_BELOW;
+  if (forceFresh) {
+    console.log(
+      `[fetchRecipes] cache count ${totalMatches} < ${FORCE_FRESH_BELOW} — forcing fresh API fetch`,
+    );
+    cacheRatio = 0;
+  }
+
+  // 2) Query cache (with seen-fallback).
   let cached: Recipe[] = [];
+  let usedSeenFallback = false;
   try {
     const cacheRes = await queryCache({
       category: data.category,
@@ -170,9 +187,13 @@ export async function fetchRecipes(
       userId,
     });
     cached = cacheRes.recipes;
+    usedSeenFallback = cacheRes.usedSeenFallback;
   } catch (e) {
-    console.error("cache query failed", e);
+    console.error("[fetchRecipes] cache query failed", e);
   }
+  console.log(
+    `[fetchRecipes] cached=${cached.length} usedSeenFallback=${usedSeenFallback}`,
+  );
 
   // 3) Fallback rule: if seen-exclusion drops cache below threshold, treat as new-user.
   if (cached.length < CACHE_THRESHOLD) {
@@ -181,15 +202,18 @@ export async function fetchRecipes(
 
   const targetFromCache = Math.min(cached.length, Math.round(number * cacheRatio));
   const targetFromApi = number - targetFromCache;
-
   const cacheSlice = cached.slice(0, targetFromCache);
 
   // 4) If we're serving 100% from cache (or no API key), short-circuit.
   const apiKey = process.env.SPOONACULAR_API_KEY;
   if (targetFromApi <= 0 || !apiKey) {
+    if (!apiKey) console.warn("[fetchRecipes] SPOONACULAR_API_KEY missing — cache only");
     if (cacheSlice.length) {
       incrementHits(cacheSlice.map((r) => r.id)).catch(() => {});
-      if (userId) markRecipesSeen(userId, cacheSlice.map((r) => r.id)).catch(() => {});
+      // Don't mark as seen if we're already replaying seen recipes.
+      if (userId && !usedSeenFallback) {
+        markRecipesSeen(userId, cacheSlice.map((r) => r.id)).catch(() => {});
+      }
     }
     return { recipes: cacheSlice, totalResults: totalMatches || cacheSlice.length };
   }
@@ -209,27 +233,26 @@ export async function fetchRecipes(
   });
 
   const url = `https://api.spoonacular.com/recipes/complexSearch?${params.toString()}`;
-  const res = await fetch(url);
+  console.log(`[fetchRecipes] Spoonacular fetch type=${CATEGORY_TO_TYPE[data.category]} need=${targetFromApi}`);
+  let res: Response;
+  try {
+    res = await fetch(url);
+  } catch (e) {
+    console.error("[fetchRecipes] Spoonacular network error", e);
+    return fallbackReturn(cached, cacheSlice, number, totalMatches, userId, usedSeenFallback);
+  }
   if (!res.ok) {
     const text = await res.text();
-    console.error("Spoonacular error", res.status, text);
-    const fallback = cached.slice(0, number);
-    if (fallback.length) {
-      incrementHits(fallback.map((r) => r.id)).catch(() => {});
-      if (userId) markRecipesSeen(userId, fallback.map((r) => r.id)).catch(() => {});
-    }
-    return { recipes: fallback, totalResults: totalMatches || fallback.length };
+    console.error("[fetchRecipes] Spoonacular non-OK", res.status, text.slice(0, 300));
+    return fallbackReturn(cached, cacheSlice, number, totalMatches, userId, usedSeenFallback);
   }
   const json: any = await res.json();
   const results: any[] = json.results ?? [];
+  console.log(`[fetchRecipes] Spoonacular returned ${results.length} raw results`);
 
   if (results.length === 0) {
-    const fallback = [...cached.slice(0, number), ...localFallbackRecipes(data, number)].slice(0, number);
-    if (fallback.length) {
-      incrementHits(fallback.map((r) => r.id)).catch(() => {});
-      if (userId) markRecipesSeen(userId, fallback.map((r) => r.id)).catch(() => {});
-    }
-    return { recipes: fallback, totalResults: totalMatches || fallback.length };
+    console.warn("[fetchRecipes] Spoonacular returned 0 results");
+    return fallbackReturn(cached, cacheSlice, number, totalMatches, userId, usedSeenFallback);
   }
 
   const cacheIds = new Set(cacheSlice.map((r) => r.id));
@@ -274,7 +297,7 @@ export async function fetchRecipes(
           ? r.dishTypes[0].charAt(0).toUpperCase() + r.dishTypes[0].slice(1)
           : "Fresh from the kitchen",
         image: r.image ?? "",
-        category: data.category,
+        category: data.category, // bound to the requested category
         calories,
         protein,
         carbs,
@@ -316,7 +339,7 @@ export async function fetchRecipes(
         updated = applyReview(r, review);
         confidence = review?.confidence ?? 0;
       } catch (e) {
-        console.error("Review failed for", r.id, e);
+        console.error("[fetchRecipes] AI review failed for", r.id, e);
         updated = applyReview(r, null);
       }
 
@@ -324,25 +347,31 @@ export async function fetchRecipes(
       try {
         imageUrl = await getOrGenerateImage(updated.id, updated.name);
       } catch (e) {
-        console.error("Image gen failed for", updated.id, e);
+        console.error("[fetchRecipes] image gen failed for", updated.id, e);
       }
       if (imageUrl) updated = { ...updated, image: imageUrl };
 
-      saveCachedRecipe(updated, confidence, imageUrl).catch(() => {});
+      saveCachedRecipe(updated, confidence, imageUrl).catch((e) =>
+        console.error("[fetchRecipes] saveCachedRecipe failed for", updated.id, e),
+      );
       return updated;
     }),
   );
 
   const combined = [...cacheSlice, ...reviewed].slice(0, number);
+  console.log(`[fetchRecipes] returning ${combined.length} recipes (cache=${cacheSlice.length} fresh=${reviewed.length})`);
 
   if (combined.length === 0) {
     const fallback = localFallbackRecipes(data, number);
+    console.warn(`[fetchRecipes] empty combined — using local fallback (${fallback.length})`);
     return { recipes: fallback, totalResults: fallback.length };
   }
 
   if (cacheSlice.length) incrementHits(cacheSlice.map((r) => r.id)).catch(() => {});
   if (userId && combined.length) {
-    markRecipesSeen(userId, combined.map((r) => r.id)).catch(() => {});
+    // Don't re-mark already-seen replays.
+    const toMark = combined.filter((r) => !r.seen).map((r) => r.id);
+    if (toMark.length) markRecipesSeen(userId, toMark).catch(() => {});
   }
 
   return {
@@ -350,3 +379,24 @@ export async function fetchRecipes(
     totalResults: json.totalResults ?? combined.length,
   };
 }
+
+function fallbackReturn(
+  cached: Recipe[],
+  cacheSlice: Recipe[],
+  number: number,
+  totalMatches: number,
+  userId: string | null,
+  usedSeenFallback: boolean,
+): { recipes: Recipe[]; totalResults: number } {
+  // Prefer the full cached pool (includes seen-fallback) over the sliced subset.
+  const pool = cached.length ? cached : cacheSlice;
+  const fallback = pool.slice(0, number);
+  if (fallback.length) {
+    incrementHits(fallback.map((r) => r.id)).catch(() => {});
+    if (userId && !usedSeenFallback) {
+      markRecipesSeen(userId, fallback.filter((r) => !r.seen).map((r) => r.id)).catch(() => {});
+    }
+  }
+  return { recipes: fallback, totalResults: totalMatches || fallback.length };
+}
+
