@@ -271,16 +271,27 @@ function Page() {
         })}
 
         {feedItems.length === 0 && (
-          <div className="snap-item flex h-full w-full flex-col items-center justify-center gap-3 text-muted-foreground">
+          <div className="snap-item flex h-full w-full flex-col items-center justify-center gap-4 px-8 text-muted-foreground">
             {loading ? (
               <>
                 <Loader2 className="h-6 w-6 animate-spin text-primary" />
                 <p className="text-sm">Loading fresh recipes…</p>
               </>
-            ) : error ? (
-              <p className="px-8 text-center text-sm text-destructive">{error}</p>
             ) : (
-              <p className="text-sm">No recipes found.</p>
+              <>
+                <p className="text-center text-sm">
+                  {error
+                    ? error
+                    : "No recipes match your profile right now — try widening your filters in Settings."}
+                </p>
+                <button
+                  type="button"
+                  onClick={refreshFeed}
+                  className="rounded-full bg-primary px-5 py-2 text-xs font-bold text-primary-foreground shadow-lg transition active:scale-95"
+                >
+                  Refresh feed
+                </button>
+              </>
             )}
           </div>
         )}
