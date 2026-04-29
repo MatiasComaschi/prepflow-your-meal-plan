@@ -320,12 +320,6 @@ function Page() {
           </span>
         </div>
 
-        {prefs.aiPlan?.reasoning && (
-          <div className="pointer-events-auto flex w-full items-start gap-2 rounded-2xl border border-primary/20 bg-black/50 px-3 py-2 text-[11px] leading-snug text-foreground/90 backdrop-blur-md">
-            <span className="mt-0.5 text-primary">✨</span>
-            <span className="flex-1">{prefs.aiPlan.reasoning}</span>
-          </div>
-        )}
       </div>
 
       <BottomNav />

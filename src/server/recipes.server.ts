@@ -1,5 +1,5 @@
 // Server-only fetch + review + cache pipeline.
-import type { Category, Difficulty, Ingredient, Recipe } from "@/data/recipes";
+import { RECIPES, type Category, type Difficulty, type Ingredient, type Recipe } from "@/data/recipes";
 import type { RecipeFilters } from "./recipes.types";
 import { reviewRecipeServerFn, applyReview } from "./aiReview";
 import {
@@ -35,6 +35,32 @@ function difficultyFromTime(min: number): Difficulty {
 
 function stripHtml(s: string): string {
   return (s || "").replace(/<[^>]+>/g, "").trim();
+}
+
+function localFallbackRecipes(data: FetchInput, number: number): Recipe[] {
+  const avoid = new Set(
+    (data.filters?.aiPlan?.avoid ?? []).map((item) => item.toLowerCase().trim()).filter(Boolean),
+  );
+  const restrictions = new Set(data.filters?.restrictions ?? []);
+
+  return RECIPES.filter((recipe) => recipe.category === data.category)
+    .filter((recipe) => {
+      const ingredients = recipe.ingredients.map((i) => i.name.toLowerCase()).join(" ");
+      for (const item of avoid) {
+        if (ingredients.includes(item)) return false;
+      }
+      if (restrictions.has("no_pork") && /\b(pork|bacon|ham|prosciutto)\b/.test(ingredients)) return false;
+      if (restrictions.has("no_shellfish") && /\b(shrimp|prawn|crab|lobster|shellfish)\b/.test(ingredients)) return false;
+      if (restrictions.has("no_dairy") && /\b(yogurt|cheese|feta|milk|whey|cottage)\b/.test(ingredients)) return false;
+      if (restrictions.has("no_gluten") && /\b(bread|sourdough|pasta|wheat)\b/.test(ingredients)) return false;
+      return true;
+    })
+    .sort((a, b) => {
+      if (data.filters?.goal === "lose_fat") return b.protein - a.protein || a.calories - b.calories;
+      if (data.filters?.goal === "build_muscle") return b.calories - a.calories || b.protein - a.protein;
+      return b.protein - a.protein;
+    })
+    .slice(0, number);
 }
 
 function buildPrefParams(
@@ -96,9 +122,6 @@ function buildPrefParams(
     out.minFat = String(Math.max(0, Math.round(perMealFat * scale * 0.4)));
     out.maxFat = String(Math.round(perMealFat * scale * 1.6));
 
-    if (filters.aiPlan.meal_keywords?.length) {
-      out.query = filters.aiPlan.meal_keywords.slice(0, 4).join(" ");
-    }
     if (filters.aiPlan.avoid?.length) {
       const avoid = filters.aiPlan.avoid.slice(0, 10).join(",");
       out.excludeIngredients = out.excludeIngredients
@@ -199,6 +222,15 @@ export async function fetchRecipes(
   }
   const json: any = await res.json();
   const results: any[] = json.results ?? [];
+
+  if (results.length === 0) {
+    const fallback = [...cached.slice(0, number), ...localFallbackRecipes(data, number)].slice(0, number);
+    if (fallback.length) {
+      incrementHits(fallback.map((r) => r.id)).catch(() => {});
+      if (userId) markRecipesSeen(userId, fallback.map((r) => r.id)).catch(() => {});
+    }
+    return { recipes: fallback, totalResults: totalMatches || fallback.length };
+  }
 
   const cacheIds = new Set(cacheSlice.map((r) => r.id));
   const fresh: Recipe[] = results
@@ -302,6 +334,11 @@ export async function fetchRecipes(
   );
 
   const combined = [...cacheSlice, ...reviewed].slice(0, number);
+
+  if (combined.length === 0) {
+    const fallback = localFallbackRecipes(data, number);
+    return { recipes: fallback, totalResults: fallback.length };
+  }
 
   if (cacheSlice.length) incrementHits(cacheSlice.map((r) => r.id)).catch(() => {});
   if (userId && combined.length) {
