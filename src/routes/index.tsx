@@ -113,13 +113,21 @@ function Page() {
         if (res.recipes.length === 0) {
           setDone(true);
         }
+        // Sanity: drop anything that doesn't match the requested category.
+        const safe = res.recipes.filter((r) => r.category === cat);
+        if (safe.length !== res.recipes.length) {
+          console.warn(
+            `[feed] dropped ${res.recipes.length - safe.length} cross-category recipes from response`,
+          );
+        }
         setRecipes((prev) => {
-          if (reset) return res.recipes;
+          if (reset) return safe;
           const seen = new Set(prev.map((r) => r.id));
-          return [...prev, ...res.recipes.filter((r) => !seen.has(r.id))];
+          return [...prev, ...safe.filter((r) => !seen.has(r.id))];
         });
-        setOffset(currentOffset + res.recipes.length);
+        setOffset(currentOffset + safe.length);
       } catch (e: any) {
+        console.error("[feed] fetchRecipesServerFn error", e);
         setError(e?.message ?? "Failed to load recipes");
       } finally {
         setLoading(false);
@@ -127,6 +135,16 @@ function Page() {
     },
     [],
   );
+
+  const refreshFeed = useCallback(() => {
+    const base = Math.floor(Math.random() * 200);
+    baseOffsetRef.current = base;
+    setRecipes([]);
+    setOffset(base);
+    setDone(false);
+    scrollerRef.current?.scrollTo({ top: 0 });
+    loadMore(category, base, true);
+  }, [category, loadMore]);
 
   // Fresh feed when category OR preferences change.
   useEffect(() => {
