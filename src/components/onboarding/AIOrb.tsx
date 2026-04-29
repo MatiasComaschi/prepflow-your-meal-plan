@@ -51,8 +51,8 @@ export function AIOrb({ phase, pulseKey, completing = false, captionOverride }: 
       <div
         className={`relative overflow-hidden rounded-2xl ${completing ? "orb-completing" : ""}`}
         style={{
-          width: 350,
-          height: 350,
+          width: 420,
+          height: 420,
           background:
             "radial-gradient(circle at 50% 50%, rgba(200,244,97,0.06) 0%, #0c0d0a 35%, #040506 100%)",
         }}
@@ -82,7 +82,7 @@ export function AIOrb({ phase, pulseKey, completing = false, captionOverride }: 
           aria-hidden
         >
           <filter id={`grain-${noiseId}`}>
-            <feTurbulence type="fractalNoise" baseFrequency="0.9" numOctaves="2" stitchTiles="stitch" />
+            <feTurbulence type="fractalNoise" baseFrequency="0.65" numOctaves="3" stitchTiles="stitch" />
             <feColorMatrix type="saturate" values="0" />
           </filter>
           <rect width="100%" height="100%" filter={`url(#grain-${noiseId})`} />
@@ -187,9 +187,9 @@ export function AIOrb({ phase, pulseKey, completing = false, captionOverride }: 
             marginTop: -75,
             borderRadius: "50%",
             overflow: "hidden",
-            background: "radial-gradient(circle at 50% 55%, #1a1d14 0%, #050604 100%)",
+            background: "radial-gradient(circle at 50% 55%, rgb(40,50,25) 0%, rgb(8,12,4) 100%)",
             boxShadow:
-              "0 0 60px rgba(200,244,97,0.25), inset 0 0 30px rgba(0,0,0,0.6)",
+              "0 0 80px rgba(200,244,97,0.5), 0 0 160px rgba(200,244,97,0.25), inset 0 0 40px rgba(0,0,0,0.6)",
           }}
         >
           {/* Aurora 1 - lime */}
@@ -199,7 +199,7 @@ export function AIOrb({ phase, pulseKey, completing = false, captionOverride }: 
               background:
                 "radial-gradient(ellipse 70% 50% at 35% 40%, #c8f461 0%, transparent 55%), radial-gradient(ellipse 60% 70% at 65% 60%, #84cc16 0%, transparent 60%)",
               mixBlendMode: "screen",
-              opacity: 0.85,
+              opacity: 1,
             }}
           />
           {/* Aurora 2 - mint */}
@@ -209,7 +209,7 @@ export function AIOrb({ phase, pulseKey, completing = false, captionOverride }: 
               background:
                 "radial-gradient(ellipse 65% 55% at 60% 35%, #6ee7b7 0%, transparent 55%), radial-gradient(ellipse 55% 65% at 30% 65%, #34d399 0%, transparent 60%)",
               mixBlendMode: "screen",
-              opacity: 0.7,
+              opacity: 0.9,
             }}
           />
           {/* Aurora 3 - white highlight */}
@@ -219,7 +219,17 @@ export function AIOrb({ phase, pulseKey, completing = false, captionOverride }: 
               background:
                 "radial-gradient(ellipse 35% 25% at 40% 30%, rgba(255,255,255,0.9) 0%, transparent 60%)",
               mixBlendMode: "screen",
-              opacity: 0.6,
+              opacity: 0.8,
+            }}
+          />
+          {/* Aurora 4 - sun-like top-left highlight */}
+          <div
+            className="absolute inset-0 orb-aurora-4"
+            style={{
+              background:
+                "radial-gradient(ellipse 40% 30% at 30% 25%, rgb(255,255,200) 0%, transparent 50%)",
+              mixBlendMode: "screen",
+              opacity: 0.7,
             }}
           />
           {/* Rim light top-left */}
@@ -359,6 +369,11 @@ export function AIOrb({ phase, pulseKey, completing = false, captionOverride }: 
         .orb-aurora-1 { animation: orb-aurora-1 8s ease-in-out infinite; }
         .orb-aurora-2 { animation: orb-aurora-2 12s ease-in-out infinite; }
         .orb-aurora-3 { animation: orb-aurora-3 6s ease-in-out infinite; }
+        @keyframes orb-aurora-4 {
+          0%, 100% { transform: translate(0, 0) scale(1); opacity: 0.7; }
+          50% { transform: translate(3%, 4%) scale(1.12); opacity: 0.95; }
+        }
+        .orb-aurora-4 { animation: orb-aurora-4 10s ease-in-out infinite; }
 
         @keyframes orb-particle-float {
           0%, 100% { transform: translate(0, 0); opacity: 0.4; }
@@ -383,9 +398,9 @@ export function AIOrb({ phase, pulseKey, completing = false, captionOverride }: 
         .orb-label-glow { animation: orb-label-glow-anim 3s ease-in-out infinite; }
 
         @keyframes orb-pulse-anim {
-          0% { transform: scale(1); box-shadow: 0 0 60px rgba(200,244,97,0.25), inset 0 0 30px rgba(0,0,0,0.6); }
-          50% { transform: scale(1.08); box-shadow: 0 0 90px rgba(200,244,97,0.6), inset 0 0 30px rgba(0,0,0,0.4); }
-          100% { transform: scale(1); box-shadow: 0 0 60px rgba(200,244,97,0.25), inset 0 0 30px rgba(0,0,0,0.6); }
+          0% { transform: scale(1); box-shadow: 0 0 80px rgba(200,244,97,0.5), 0 0 160px rgba(200,244,97,0.25), inset 0 0 40px rgba(0,0,0,0.6); }
+          50% { transform: scale(1.08); box-shadow: 0 0 120px rgba(200,244,97,0.75), 0 0 220px rgba(200,244,97,0.4), inset 0 0 40px rgba(0,0,0,0.4); }
+          100% { transform: scale(1); box-shadow: 0 0 80px rgba(200,244,97,0.5), 0 0 160px rgba(200,244,97,0.25), inset 0 0 40px rgba(0,0,0,0.6); }
         }
         .orb-pulse { animation: orb-pulse-anim 0.7s ease-out; }
 
