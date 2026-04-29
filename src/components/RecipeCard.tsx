@@ -45,6 +45,11 @@ export function RecipeCard({ recipe, eager, onOpen, added }: Props) {
         {/* Top row: verification badge */}
         <div className="absolute left-0 right-0 top-0 flex items-start justify-between p-5 pt-[calc(env(safe-area-inset-top)+4.5rem)]">
           <VerificationBadge kind={recipe.verification} />
+          {recipe.seen && (
+            <span className="rounded-full bg-black/50 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wider text-white/70 ring-1 ring-white/10 backdrop-blur-md">
+              Seen
+            </span>
+          )}
         </div>
 
         {added && (

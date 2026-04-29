@@ -45,6 +45,7 @@ export type Recipe = {
   verification: Verification;
   ingredients: Ingredient[];
   steps: string[];
+  seen?: boolean;
 };
 
 export const CATEGORIES: Category[] = ["Breakfast", "Lunch", "Dinner", "Snack"];

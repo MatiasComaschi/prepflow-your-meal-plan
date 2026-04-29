@@ -113,13 +113,21 @@ function Page() {
         if (res.recipes.length === 0) {
           setDone(true);
         }
+        // Sanity: drop anything that doesn't match the requested category.
+        const safe = res.recipes.filter((r) => r.category === cat);
+        if (safe.length !== res.recipes.length) {
+          console.warn(
+            `[feed] dropped ${res.recipes.length - safe.length} cross-category recipes from response`,
+          );
+        }
         setRecipes((prev) => {
-          if (reset) return res.recipes;
+          if (reset) return safe;
           const seen = new Set(prev.map((r) => r.id));
-          return [...prev, ...res.recipes.filter((r) => !seen.has(r.id))];
+          return [...prev, ...safe.filter((r) => !seen.has(r.id))];
         });
-        setOffset(currentOffset + res.recipes.length);
+        setOffset(currentOffset + safe.length);
       } catch (e: any) {
+        console.error("[feed] fetchRecipesServerFn error", e);
         setError(e?.message ?? "Failed to load recipes");
       } finally {
         setLoading(false);
@@ -127,6 +135,16 @@ function Page() {
     },
     [],
   );
+
+  const refreshFeed = useCallback(() => {
+    const base = Math.floor(Math.random() * 200);
+    baseOffsetRef.current = base;
+    setRecipes([]);
+    setOffset(base);
+    setDone(false);
+    scrollerRef.current?.scrollTo({ top: 0 });
+    loadMore(category, base, true);
+  }, [category, loadMore]);
 
   // Fresh feed when category OR preferences change.
   useEffect(() => {
@@ -253,16 +271,27 @@ function Page() {
         })}
 
         {feedItems.length === 0 && (
-          <div className="snap-item flex h-full w-full flex-col items-center justify-center gap-3 text-muted-foreground">
+          <div className="snap-item flex h-full w-full flex-col items-center justify-center gap-4 px-8 text-muted-foreground">
             {loading ? (
               <>
                 <Loader2 className="h-6 w-6 animate-spin text-primary" />
                 <p className="text-sm">Loading fresh recipes…</p>
               </>
-            ) : error ? (
-              <p className="px-8 text-center text-sm text-destructive">{error}</p>
             ) : (
-              <p className="text-sm">No recipes found.</p>
+              <>
+                <p className="text-center text-sm">
+                  {error
+                    ? error
+                    : "No recipes match your profile right now — try widening your filters in Settings."}
+                </p>
+                <button
+                  type="button"
+                  onClick={refreshFeed}
+                  className="rounded-full bg-primary px-5 py-2 text-xs font-bold text-primary-foreground shadow-lg transition active:scale-95"
+                >
+                  Refresh feed
+                </button>
+              </>
             )}
           </div>
         )}
