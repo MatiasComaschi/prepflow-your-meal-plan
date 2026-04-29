@@ -398,9 +398,9 @@ export function AIOrb({ phase, pulseKey, completing = false, captionOverride }: 
         .orb-label-glow { animation: orb-label-glow-anim 3s ease-in-out infinite; }
 
         @keyframes orb-pulse-anim {
-          0% { transform: scale(1); box-shadow: 0 0 60px rgba(200,244,97,0.25), inset 0 0 30px rgba(0,0,0,0.6); }
-          50% { transform: scale(1.08); box-shadow: 0 0 90px rgba(200,244,97,0.6), inset 0 0 30px rgba(0,0,0,0.4); }
-          100% { transform: scale(1); box-shadow: 0 0 60px rgba(200,244,97,0.25), inset 0 0 30px rgba(0,0,0,0.6); }
+          0% { transform: scale(1); box-shadow: 0 0 80px rgba(200,244,97,0.5), 0 0 160px rgba(200,244,97,0.25), inset 0 0 40px rgba(0,0,0,0.6); }
+          50% { transform: scale(1.08); box-shadow: 0 0 120px rgba(200,244,97,0.75), 0 0 220px rgba(200,244,97,0.4), inset 0 0 40px rgba(0,0,0,0.4); }
+          100% { transform: scale(1); box-shadow: 0 0 80px rgba(200,244,97,0.5), 0 0 160px rgba(200,244,97,0.25), inset 0 0 40px rgba(0,0,0,0.6); }
         }
         .orb-pulse { animation: orb-pulse-anim 0.7s ease-out; }
 
