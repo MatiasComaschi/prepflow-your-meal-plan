@@ -1,6 +1,5 @@
 import { useState } from "react";
-import { ChevronLeft, ChevronRight, Check, Sparkles, Loader2 } from "lucide-react";
-import { AIOrb } from "@/components/onboarding/AIOrb";
+import { ChevronLeft, ChevronRight, Check, Loader2 } from "lucide-react";
 import {
   usePreferences,
   GOAL_OPTIONS,
@@ -31,7 +30,6 @@ export function Onboarding() {
   const [phaseIdx, setPhaseIdx] = useState(0);
   const [analyzing, setAnalyzing] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [pulseKey, setPulseKey] = useState(0);
   const [completing, setCompleting] = useState(false);
 
   if (!ready) return null;
@@ -42,7 +40,6 @@ export function Onboarding() {
 
   const next = async () => {
     setError(null);
-    setPulseKey((k) => k + 1);
     if (!isLast) {
       setPhaseIdx((i) => i + 1);
       return;
@@ -54,9 +51,6 @@ export function Onboarding() {
         data: { profile: draftToProfile(draft) },
       });
       if (res.error) setError(res.error);
-      // Hold the completion animation for ~2s minimum for the orb finale
-      const minDelay = new Promise((r) => setTimeout(r, 2000));
-      await minDelay;
       await setPrefs({ ...draft, aiPlan: res.plan ?? null, onboarded: true });
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : "AI analysis failed";
@@ -73,39 +67,23 @@ export function Onboarding() {
   return (
     <div className="fixed inset-0 z-[100] flex items-stretch justify-center bg-background/95 backdrop-blur-xl">
       <div className="mx-auto flex h-[100dvh] w-full max-w-md flex-col px-6 pb-[max(1.5rem,env(safe-area-inset-bottom))] pt-[max(1.5rem,env(safe-area-inset-top))]">
-        {/* Progress */}
-        <div className="flex items-center gap-1.5">
+        {/* Progress dots */}
+        <div className="flex items-center justify-center gap-2">
           {PHASES.map((_, i) => (
             <div
               key={i}
-              className={`h-1 flex-1 rounded-full transition-colors ${
+              className={`h-1.5 w-1.5 rounded-full transition-colors ${
                 i <= phaseIdx ? "bg-primary" : "bg-muted"
               }`}
             />
           ))}
         </div>
 
-        <div className="mt-6 flex items-center justify-between">
-          <div className="flex items-center gap-2 text-[11px] font-bold uppercase tracking-[0.3em] text-primary">
-            <Sparkles className="h-3.5 w-3.5" />
-            Phase {phaseIdx + 1} of {PHASES.length}
-          </div>
-          <div className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
-            {phaseTitle}
-          </div>
+        <div className="mt-2 text-center text-[11px] font-medium uppercase tracking-[0.25em] text-muted-foreground">
+          Step {phaseIdx + 1} of {PHASES.length} · {phaseTitle}
         </div>
 
-        {/* Persistent AI orb */}
-        <div className="mt-4 flex justify-center">
-          <AIOrb
-            phase={phaseIdx as 0 | 1 | 2 | 3 | 4}
-            pulseKey={pulseKey}
-            completing={completing}
-            captionOverride={completing ? "your AI is ready" : undefined}
-          />
-        </div>
-
-        <div className="mt-3 flex-1 overflow-y-auto no-scrollbar">
+        <div className="mt-6 flex-1 overflow-y-auto no-scrollbar">
           {phaseIdx === 0 && <PhaseAbout draft={draft} setDraft={setDraft} />}
           {phaseIdx === 1 && <PhaseGoal draft={draft} setDraft={setDraft} />}
           {phaseIdx === 2 && <PhaseFood draft={draft} setDraft={setDraft} />}
